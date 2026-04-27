@@ -1,0 +1,438 @@
+@import "tailwindcss" source(none);
+@source "../";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-body);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  /* BrandMultiplier — brand = primary violet; use bm-orange for #F97316 emphasis */
+  --color-bm-orange: #f97316;
+  --color-success: var(--success-warm);
+  --color-warning: var(--warning-warm);
+  --color-brand: var(--brand-primary);
+  --color-brand-hover: var(--brand-primary-hover);
+  --color-brand-subtle: var(--brand-primary-subtle);
+  --color-terracotta: var(--terracotta);
+  --color-coral: var(--coral);
+  --color-parchment: var(--parchment);
+  --color-ivory: var(--ivory);
+  --color-sand: var(--warm-sand);
+  --color-stone: var(--stone-gray);
+  --color-olive: var(--olive-gray);
+  --color-charcoal: var(--charcoal-warm);
+  --color-silver: var(--warm-silver);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ─── BrandMultiplier (brandmultiplier.ai) — #000 / #fff, violet→indigo gradient, orange #F97316 ─── */
+:root {
+  --bm-black: #000000;
+  --bm-white: #ffffff;
+  --bm-muted: #a1a1aa;
+  --bm-violet: #8b5cf6;
+  --bm-violet-hover: #7c3aed;
+  --bm-violet-subtle: #ede9fe;
+  --bm-orange: #f97316;
+  --bm-orange-subtle: #ffedd5;
+  --brand-accent: var(--bm-violet);
+
+  --parchment: #fafafa;
+  --ivory: #ffffff;
+  --warm-sand: #f4f4f5;
+  --border-cream: #e4e4e7;
+  --border-warm: #d4d4d8;
+  --near-black: #000000;
+  --dark-surface: #0a0a0a;
+  --deep-dark: #000000;
+
+  --charcoal-warm: #3f3f46;
+  --olive-gray: #71717a;
+  --stone-gray: #a1a1aa;
+  --warm-silver: #d4d4d8;
+
+  --terracotta: #ea580c;
+  --coral: #f97316;
+
+  --brand-primary: var(--bm-violet);
+  --brand-primary-hover: var(--bm-violet-hover);
+  --brand-primary-subtle: var(--bm-violet-subtle);
+
+  --success-warm: #22c55e;
+  --warning-warm: #eab308;
+  --error-crimson: #ef4444;
+
+  --background: var(--parchment);
+  --foreground: var(--near-black);
+  --card: var(--ivory);
+  --card-foreground: var(--near-black);
+  --popover: var(--ivory);
+  --popover-foreground: var(--near-black);
+  --primary: var(--bm-violet);
+  --primary-foreground: var(--bm-white);
+  --secondary: var(--warm-sand);
+  --secondary-foreground: var(--charcoal-warm);
+  --muted: var(--warm-sand);
+  --muted-foreground: var(--olive-gray);
+  --accent: var(--bm-violet-subtle);
+  --accent-foreground: var(--bm-violet-hover);
+  --destructive: var(--error-crimson);
+  --border: var(--border-cream);
+  --input: var(--border-warm);
+  --ring: var(--bm-violet);
+  --chart-1: var(--bm-violet);
+  --chart-2: var(--bm-orange);
+  --chart-3: #a78bfa;
+  --chart-4: var(--success-warm);
+  --chart-5: var(--warning-warm);
+  --radius: 0.75rem;
+
+  --sidebar: #fafafa;
+  --sidebar-foreground: var(--charcoal-warm);
+  --sidebar-primary: var(--bm-violet);
+  --sidebar-primary-foreground: var(--bm-white);
+  --sidebar-accent: var(--warm-sand);
+  --sidebar-accent-foreground: var(--near-black);
+  --sidebar-border: var(--border-cream);
+  --sidebar-ring: var(--bm-violet);
+}
+
+.dark {
+  --background: var(--bm-black);
+  --foreground: var(--bm-white);
+  --card: #0a0a0a;
+  --card-foreground: var(--bm-white);
+  --popover: #0a0a0a;
+  --popover-foreground: var(--bm-white);
+  --primary: var(--bm-violet);
+  --primary-foreground: var(--bm-white);
+  --secondary: #18181b;
+  --secondary-foreground: var(--bm-white);
+  --muted: #18181b;
+  --muted-foreground: var(--bm-muted);
+  --accent: rgba(139, 92, 246, 0.2);
+  --accent-foreground: #e9d5ff;
+  --destructive: #f87171;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: var(--bm-violet);
+  --chart-1: var(--bm-violet);
+  --chart-2: var(--bm-orange);
+  --chart-3: #a78bfa;
+  --chart-4: #4ade80;
+  --chart-5: #facc15;
+  --sidebar: var(--bm-black);
+  --sidebar-foreground: var(--bm-muted);
+  --sidebar-primary: var(--bm-violet);
+  --sidebar-primary-foreground: var(--bm-white);
+  --sidebar-accent: #0a0a0a;
+  --sidebar-accent-foreground: var(--bm-white);
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: var(--bm-violet);
+
+  --brand-primary-subtle: rgba(139, 92, 246, 0.15);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased min-h-screen relative overflow-x-hidden;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -2;
+    background-color: var(--background);
+  }
+
+  /* Soft violet / indigo glow (hero-style, brandmultiplier.ai) */
+  body::after {
+    content: "";
+    position: fixed;
+    top: -35%;
+    left: -5%;
+    width: 55%;
+    height: 55%;
+    z-index: -1;
+    opacity: 0.14;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, #8b5cf6 0%, #6366f1 35%, transparent 70%);
+    filter: blur(90px);
+  }
+
+  .dark body::after {
+    opacity: 0.22;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--warm-sand);
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--stone-gray);
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #27272a;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+  }
+}
+
+/* ─── Clean Card — Claude ring-shadow style ─── */
+.clean-card {
+  background: var(--card);
+  border-radius: 14px;
+  position: relative;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 0 0 1px var(--border-cream);
+}
+
+.clean-card:hover {
+  box-shadow: 0 0 0 1px var(--border-warm), 0 4px 24px -8px rgba(20, 20, 19, 0.06);
+}
+
+.dark .clean-card {
+  background: var(--card);
+  box-shadow: 0 0 0 1px rgba(245, 244, 237, 0.06);
+}
+
+.dark .clean-card:hover {
+  box-shadow: 0 0 0 1px rgba(245, 244, 237, 0.12);
+}
+
+/* ─── Glass Panel — warm parchment veil ─── */
+.glass-panel {
+  background: color-mix(in srgb, var(--ivory) 80%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-cream);
+  border-radius: 14px;
+}
+
+.dark .glass-panel {
+  background: color-mix(in srgb, var(--dark-surface) 70%, transparent);
+  border-color: rgba(245, 244, 237, 0.08);
+}
+
+/* ─── Premium Header — warm blur ─── */
+.premium-header {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: color-mix(in srgb, var(--parchment) 70%, transparent);
+  border-bottom: 1px solid var(--border-cream);
+}
+
+.dark .premium-header {
+  background: color-mix(in srgb, var(--near-black) 70%, transparent);
+  border-bottom-color: rgba(245, 244, 237, 0.06);
+}
+
+/* ─── Stat Glow ─── */
+.stat-glow {
+  color: var(--foreground);
+}
+
+.dark .stat-glow {
+  text-shadow: 0 0 48px color-mix(in srgb, var(--bm-violet) 35%, transparent);
+}
+
+/* ─── Text gradient — lavender → indigo (marketing hero) ─── */
+.text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(135deg, var(--near-black) 0%, #7c3aed 55%, #6366f1 100%);
+}
+
+.dark .text-gradient {
+  background-image: linear-gradient(135deg, #ffffff 0%, #c4b5fd 45%, #a78bfa 100%);
+}
+
+/* ─── Loading Shimmer ─── */
+.loading-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--warm-sand) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Workflow Canvas — dot grid background ─── */
+.canvas-grid {
+  background-color: var(--ivory);
+  background-image: radial-gradient(circle, var(--border-warm) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0;
+  border-radius: 16px;
+  border: 1px solid var(--border-cream);
+}
+
+.dark .canvas-grid {
+  background-color: var(--dark-surface);
+  background-image: radial-gradient(circle, rgba(245, 244, 237, 0.06) 1px, transparent 1px);
+  border: 1px solid rgba(245, 244, 237, 0.06);
+}
+
+/* ─── Claudio mascot animations ─── */
+@keyframes claudio-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8%); }
+}
+.claudio-bounce {
+  display: inline-block;
+  animation: claudio-bounce 2.4s ease-in-out infinite;
+  transform-origin: center bottom;
+  will-change: transform;
+}
+
+@keyframes claudio-wave {
+  0%, 100%      { transform: rotate(-6deg); }
+  50%           { transform: rotate(6deg); }
+}
+.claudio-wave {
+  display: inline-block;
+  animation: claudio-wave 1.6s ease-in-out infinite;
+  transform-origin: center 80%;
+  will-change: transform;
+}
+
+/* Eye blink — squashes the eyes vertically every few seconds */
+@keyframes claudio-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  94%, 96%      { transform: scaleY(0.1); }
+}
+.claudio-blink {
+  animation: claudio-blink 4s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+  will-change: transform;
+}
+
+/* Scan — violet glow on the eyes */
+@keyframes claudio-scan {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50%      { filter: drop-shadow(0 0 6px var(--bm-violet)); }
+}
+.claudio-scan {
+  display: inline-block;
+  animation: claudio-scan 1.8s ease-in-out infinite;
+  will-change: filter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .claudio-bounce, .claudio-wave, .claudio-blink, .claudio-scan {
+    animation: none;
+  }
+}
+
+/* ─── Pulse Ring — brand accent ─── */
+.pulse-ring {
+  position: relative;
+}
+.pulse-ring::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid var(--bm-violet);
+  opacity: 0;
+  animation: pulse-ring 2s ease-out infinite;
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+/* ─── Elevated Card ─── */
+.elevated-card {
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--border-cream);
+}
+
+.dark .elevated-card {
+  box-shadow: 0 0 0 1px rgba(245, 244, 237, 0.08);
+}
+
+/* Headings — geometric sans (BrandMultiplier marketing) */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-body), system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+/* Optional opt-out for places where serif is wrong (table headers, button text, labels) */
+.font-ui {
+  font-family: var(--font-body), system-ui, -apple-system, "Segoe UI", sans-serif !important;
+  letter-spacing: -0.01em;
+}
+
+body {
+  font-family: var(--font-body), system-ui, -apple-system, "Segoe UI", sans-serif;
+}

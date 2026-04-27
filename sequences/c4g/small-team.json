@@ -1,0 +1,41 @@
+{
+  "project": "claw4growth",
+  "segment": "small_team",
+  "description": "Piccoli team senza marketer dedicato — outreach LinkedIn",
+  "search": {
+    "keywords": ["founder", "CEO", "managing director"],
+    "roles": ["Founder", "CEO", "Managing Director", "COO"],
+    "locations": ["Italy"],
+    "company_size": ["2-10"],
+    "industries": []
+  },
+  "sequence": [
+    {
+      "step": 1,
+      "type": "connection_request",
+      "delay_days": 0,
+      "note": "Ciao {{first_name}}, interessante quello che fate con {{company}}. Mi occupo di AI per il marketing — connettiamoci!"
+    },
+    {
+      "step": 2,
+      "type": "message",
+      "delay_days": 1,
+      "trigger": "accepted",
+      "text": "Grazie {{first_name}}! Domanda diretta: avete qualcuno in team che si occupa di marketing a tempo pieno, o è una di quelle cose che fate \"quando c'è tempo\"?"
+    },
+    {
+      "step": 3,
+      "type": "message",
+      "delay_days": 4,
+      "trigger": "no_reply",
+      "text": "{{first_name}}, sto lavorando a un operatore AI che fa da marketing manager per team come il vostro — gestisce ads, social, report, CRM. Si usa da Telegram, zero formazione necessaria. Costa meno di uno stagista e lavora 24/7. Ti interesserebbe una demo veloce?"
+    },
+    {
+      "step": 4,
+      "type": "message",
+      "delay_days": 7,
+      "trigger": "no_reply",
+      "text": "Non voglio intasarti la inbox — se il timing è giusto, sono qui. In ogni caso, bella roba {{company}}! 👊"
+    }
+  ]
+}

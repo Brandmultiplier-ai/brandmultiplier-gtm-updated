@@ -1,0 +1,40 @@
+{
+  "project": "claw4growth",
+  "segment": "freelancer",
+  "description": "Freelancer & consulenti — outreach LinkedIn",
+  "search": {
+    "keywords": ["freelance", "consulente", "coach", "libero professionista"],
+    "roles": ["Founder", "Freelance", "Consultant", "Coach"],
+    "locations": ["Italy"],
+    "industries": []
+  },
+  "sequence": [
+    {
+      "step": 1,
+      "type": "connection_request",
+      "delay_days": 0,
+      "note": "Ciao {{first_name}}, ho visto il tuo profilo — mi occupo di AI applicata al marketing per professionisti. Mi farebbe piacere connetterci!"
+    },
+    {
+      "step": 2,
+      "type": "message",
+      "delay_days": 1,
+      "trigger": "accepted",
+      "text": "Grazie per la connessione {{first_name}}! Curiosità: come gestisci il marketing del tuo business oggi? Tutto manuale o usi qualche tool?"
+    },
+    {
+      "step": 3,
+      "type": "message",
+      "delay_days": 3,
+      "trigger": "no_reply",
+      "text": "{{first_name}}, sto lavorando a un progetto che potrebbe interessarti — un operatore AI che gestisce il marketing quotidiano (ads, social, report) tutto da Telegram. Zero dashboard, zero complessità. Ti manderebbe un report ogni mattina con cosa sta funzionando e cosa no. Ti incuriosisce?"
+    },
+    {
+      "step": 4,
+      "type": "message",
+      "delay_days": 7,
+      "trigger": "no_reply",
+      "text": "Ultimo messaggio, promesso 😄 Se ti interessa provarlo gratis per qualche settimana, fammi sapere. Altrimenti nessun problema — in bocca al lupo col tuo business!"
+    }
+  ]
+}

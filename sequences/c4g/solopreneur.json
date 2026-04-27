@@ -1,0 +1,41 @@
+{
+  "project": "claw4growth",
+  "segment": "solopreneur",
+  "description": "Solopreneur & micro-business — outreach LinkedIn",
+  "search": {
+    "keywords": ["founder", "imprenditore", "ecommerce", "startup"],
+    "roles": ["Founder", "CEO", "Owner", "Co-Founder"],
+    "locations": ["Italy"],
+    "company_size": ["1-10"],
+    "industries": []
+  },
+  "sequence": [
+    {
+      "step": 1,
+      "type": "connection_request",
+      "delay_days": 0,
+      "note": "Ciao {{first_name}}, complimenti per {{company}}! Mi occupo di AI per il marketing — mi piacerebbe connetterci."
+    },
+    {
+      "step": 2,
+      "type": "message",
+      "delay_days": 1,
+      "trigger": "accepted",
+      "text": "Grazie {{first_name}}! Come gestite il marketing in {{company}}? Avete qualcuno dedicato o fate un po' tutti quando c'è tempo? (Zero giudizio, è la situazione del 90% delle PMI 😄)"
+    },
+    {
+      "step": 3,
+      "type": "message",
+      "delay_days": 4,
+      "trigger": "no_reply",
+      "text": "{{first_name}}, ho costruito un operatore AI che fa da marketing manager — gestisce ads, social, report, email, tutto da Telegram. Ti manda un report ogni mattina e propone azioni. Costa una frazione di un'assunzione. Ti interessa vedere come funziona?"
+    },
+    {
+      "step": 4,
+      "type": "message",
+      "delay_days": 7,
+      "trigger": "no_reply",
+      "text": "Ultimo ping — se vuoi provarlo gratis per qualche settimana, scrivi pure. In ogni caso, in bocca al lupo con {{company}}! 🚀"
+    }
+  ]
+}

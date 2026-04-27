@@ -1,0 +1,40 @@
+{
+  "project": "claw4growth",
+  "segment": "personal_brand",
+  "description": "Personal brand & creator — outreach LinkedIn",
+  "search": {
+    "keywords": ["personal brand", "content creator", "thought leader", "speaker"],
+    "roles": ["Creator", "Speaker", "Author", "Influencer", "Founder"],
+    "locations": ["Italy"],
+    "industries": []
+  },
+  "sequence": [
+    {
+      "step": 1,
+      "type": "connection_request",
+      "delay_days": 0,
+      "note": "Ciao {{first_name}}, seguo i tuoi contenuti — bel lavoro sul personal brand. Mi piacerebbe connetterci!"
+    },
+    {
+      "step": 2,
+      "type": "message",
+      "delay_days": 1,
+      "trigger": "accepted",
+      "text": "Grazie {{first_name}}! Domanda sincera: quanto tempo dedichi alla settimana per creare e distribuire contenuti su tutti i canali? È la parte che sento più spesso come bottleneck."
+    },
+    {
+      "step": 3,
+      "type": "message",
+      "delay_days": 3,
+      "trigger": "no_reply",
+      "text": "{{first_name}}, sto costruendo un operatore AI che aiuta chi fa personal brand a mantenere costanza — pianifica, scrive bozze, distribuisce su più piattaforme. Tu approvi da Telegram, lui esegue. Niente dashboard, niente tool in più. Ti suona utile?"
+    },
+    {
+      "step": 4,
+      "type": "message",
+      "delay_days": 7,
+      "trigger": "no_reply",
+      "text": "Non voglio essere insistente — se ti interessa provarlo, dimmi e ti faccio accesso. Altrimenti continua così, i tuoi contenuti sono validi! 💪"
+    }
+  ]
+}

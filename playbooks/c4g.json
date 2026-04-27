@@ -1,0 +1,73 @@
+{
+  "tenant": "claw4growth",
+  "name": "Claw4Growth — AI Marketing Operator",
+
+  "icp": {
+    "segments": [
+      {
+        "id": "freelancer",
+        "label": "Freelancer & Consulenti",
+        "keywords": "AI marketing freelancer consultant",
+        "titleFilter": "founder OR freelancer OR consultant",
+        "language": "it",
+        "locations": []
+      },
+      {
+        "id": "personal-brand",
+        "label": "Personal Brand & Creator",
+        "keywords": "AI personal brand growth solopreneur",
+        "titleFilter": "founder OR solopreneur OR creator",
+        "language": "it",
+        "locations": []
+      },
+      {
+        "id": "solopreneur",
+        "label": "Solopreneur & Piccoli founder",
+        "keywords": "AI marketing automation solopreneur",
+        "titleFilter": "founder OR CEO OR solopreneur",
+        "language": "en",
+        "locations": []
+      },
+      {
+        "id": "marketer",
+        "label": "Marketer one-man-band",
+        "keywords": "AI marketing automation one man band",
+        "titleFilter": "marketing manager OR head of marketing OR CMO",
+        "language": "it",
+        "locations": []
+      }
+    ],
+    "antiPersonas": ["recruiter", "HR", "sales executive at enterprise"]
+  },
+
+  "voice": {
+    "it": {
+      "tone": "diretto, colloquiale, zero corporate",
+      "constraints": ["mai em dash", "mai emoji eccessivi", "usa virgola invece di trattino"]
+    },
+    "en": {
+      "tone": "direct, friendly, no corporate fluff",
+      "constraints": ["no em dashes", "no excessive emojis", "use commas instead of dashes"]
+    }
+  },
+
+  "limits": {
+    "invitesPerDay": 15,
+    "invitesPerWeek": 80,
+    "delayBetweenInvitesMs": 30000,
+    "maxMessageLength": 200
+  },
+
+  "messageTemplates": {
+    "it": [
+      "Ciao {{firstName}}, {{personalization}}. Sto costruendo un AI marketing operator per {{segment}}. Mi piacerebbe confrontarci!",
+      "Ciao {{firstName}}, {{personalization}}. Lavoro su un AI marketing operator che gestisce campagne in autonomia. Ti va di connetterci?",
+      "Ciao {{firstName}}, {{personalization}}. Sto lavorando a un progetto di AI per il marketing, pensato per chi lavora in autonomia. Connettiamoci?"
+    ],
+    "en": [
+      "Hi {{firstName}}, {{personalization}}. Building an AI marketing operator for {{segment}}. Would love to connect!",
+      "Hi {{firstName}}, {{personalization}}. Working on an AI that handles marketing campaigns autonomously. Would love to connect!",
+      "Hi {{firstName}}, {{personalization}}. Building something interesting in AI marketing automation. Let's connect!"
+    ]
+  }
+}

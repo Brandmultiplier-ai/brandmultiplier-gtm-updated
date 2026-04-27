@@ -1,0 +1,40 @@
+{
+  "project": "claw4growth",
+  "segment": "marketer",
+  "description": "Marketer one-man-band — outreach LinkedIn",
+  "search": {
+    "keywords": ["marketing manager", "digital marketing", "growth", "performance marketing"],
+    "roles": ["Marketing Manager", "Head of Marketing", "Growth", "Digital Marketing"],
+    "locations": ["Italy"],
+    "industries": []
+  },
+  "sequence": [
+    {
+      "step": 1,
+      "type": "connection_request",
+      "delay_days": 0,
+      "note": "Ciao {{first_name}}, vedo che ti occupi di marketing — anch'io, lato AI automation. Connettiamoci!"
+    },
+    {
+      "step": 2,
+      "type": "message",
+      "delay_days": 1,
+      "trigger": "accepted",
+      "text": "Grazie {{first_name}}! Curiosità da collega: quanti canali gestisci da solo/a? Ho parlato con tanti marketer ultimamente e il pattern è sempre lo stesso — troppi tool, troppo tempo sui report, poco sulla strategia."
+    },
+    {
+      "step": 3,
+      "type": "message",
+      "delay_days": 3,
+      "trigger": "no_reply",
+      "text": "{{first_name}}, ho costruito un copilota AI per marketer — aggrega dati da tutti i canali (Ads, GA4, social, CRM), genera report automatici e può eseguire azioni operative. Tutto da Telegram. L'idea è liberare tempo per la strategia. Ti incuriosisce?"
+    },
+    {
+      "step": 4,
+      "type": "message",
+      "delay_days": 7,
+      "trigger": "no_reply",
+      "text": "Nessuna pressione — se in futuro vuoi provarlo, scrivimi. Buon lavoro! 🎯"
+    }
+  ]
+}
