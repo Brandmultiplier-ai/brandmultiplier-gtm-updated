@@ -136,6 +136,7 @@ export async function GET(req: NextRequest) {
       const replied = leads.filter((lead) => hasEvent(lead, "replied", start, end)).length;
 
       return {
+        campaignId: campaign.id,
         campaignName: campaign.name,
         totalLeads,
         sent,

@@ -7,7 +7,9 @@ const PUBLIC_PREFIXES = [
   "/api/webhooks",
   "/api/cron/run",
   "/login",
+  "/invite",
   "/api/auth",
+  "/api/workspaces/invites/accept",
 ];
 const PUBLIC_FILES = /\.(?:css|gif|ico|jpg|jpeg|js|map|png|svg|txt|webp|woff|woff2|xml)$/i;
 

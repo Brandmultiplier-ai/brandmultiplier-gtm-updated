@@ -11,6 +11,14 @@ export interface Workspace {
   status: "active" | "paused" | "archived";
   niche: string;           // usato dal Global Brain
   defaultLanguage: "it" | "en";
+  profileSettings?: {
+    companyName?: string;
+    website?: string;
+    industry?: string;
+    size?: string;
+    description?: string;
+    brandVoice?: string;
+  };
   channels: {
     linkedin?: { unipileAccountId: string; unipileApiKey: string; unipileBaseUrl: string };
     email?: { provider: "instantly"; apiKey: string };
@@ -107,6 +115,12 @@ export type WorkspaceRole = "owner" | "admin" | "operator" | "viewer";
 export interface AppUser {
   id: string;
   email: string;
+  displayName?: string;
+  profileSettings?: {
+    title?: string;
+    phone?: string;
+    timezone?: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +130,27 @@ export interface WorkspaceMembership {
   workspaceId: string;
   role: WorkspaceRole;
   createdAt: string;
+}
+
+export interface WorkspaceInvite {
+  id: string;
+  workspaceId: string;
+  tokenHash: string;
+  role: WorkspaceRole;
+  createdByUserId?: string;
+  acceptedByUserId?: string;
+  expiresAt: string;
+  acceptedAt?: string;
+  createdAt: string;
+}
+
+export type DashboardPeriod = "7d" | "30d" | "3m" | "current";
+
+export interface DashboardSnapshot {
+  workspaceId: string;
+  period: DashboardPeriod;
+  payload: Record<string, unknown>;
+  computedAt: string;
 }
 
 export interface ProviderConnection {

@@ -5,6 +5,7 @@ import { acquireJobLock, releaseJobLock } from "@/lib/job-lock";
 import { hasSharedSecret } from "@/lib/security";
 import { getCronJobWorkspaceId } from "@/lib/workspace-context";
 import * as store from "@/lib/store";
+import { refreshDashboardSnapshot } from "@/lib/dashboard-snapshots";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -82,6 +83,12 @@ export async function POST(req: NextRequest) {
             maxInvites,
           }),
         );
+        await Promise.all([
+          refreshDashboardSnapshot(w.id, "7d"),
+          refreshDashboardSnapshot(w.id, "30d"),
+          refreshDashboardSnapshot(w.id, "3m"),
+          refreshDashboardSnapshot(w.id, "current"),
+        ]);
       }
       const ok = results.every((r) => r.ok);
       return NextResponse.json(
@@ -95,6 +102,12 @@ export async function POST(req: NextRequest) {
       dryRun,
       maxInvites,
     });
+    await Promise.all([
+      refreshDashboardSnapshot(resolved.workspaceId, "7d"),
+      refreshDashboardSnapshot(resolved.workspaceId, "30d"),
+      refreshDashboardSnapshot(resolved.workspaceId, "3m"),
+      refreshDashboardSnapshot(resolved.workspaceId, "current"),
+    ]);
     return NextResponse.json(result, { status: result.ok ? 200 : 207 });
   } catch (error) {
     return NextResponse.json({

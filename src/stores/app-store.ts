@@ -7,6 +7,12 @@ import { apiFetch } from "@/lib/api-client";
 export interface SessionUser {
   id: string;
   email: string;
+  displayName?: string;
+  profileSettings?: {
+    title?: string;
+    phone?: string;
+    timezone?: string;
+  };
 }
 
 export interface WorkspaceSummary {
@@ -14,6 +20,16 @@ export interface WorkspaceSummary {
   name: string;
   slug?: string;
   status?: string;
+  niche?: string;
+  defaultLanguage?: "it" | "en";
+  profileSettings?: {
+    companyName?: string;
+    website?: string;
+    industry?: string;
+    size?: string;
+    description?: string;
+    brandVoice?: string;
+  };
 }
 
 export interface WorkspaceMembershipSummary {

@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppStore, type WorkspaceSummary } from "@/stores/app-store";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -284,9 +285,9 @@ function SettingsPageContent() {
 
       {/* Tab content */}
       {activeTab === "templates" && <AITemplatesTab />}
-      {activeTab === "organization" && <PlaceholderTab title="Organization" description="Team management and roles will be available here." />}
-      {activeTab === "company" && <PlaceholderTab title="Company" description="Company profile and branding settings will be available here." />}
-      {activeTab === "account" && <PlaceholderTab title="Account" description="Personal account settings will be available here." />}
+      {activeTab === "organization" && <OrganizationTab />}
+      {activeTab === "company" && <CompanyProfileTab />}
+      {activeTab === "account" && <AccountProfileTab />}
       {activeTab === "linkedin" && <LinkedInAccountsTab />}
     </div>
   );
@@ -1094,9 +1095,305 @@ function AITemplatesTab() {
   );
 }
 
-// ── Placeholder Tab ────────────────────────────────────────────────────
+// ── Workspace / Profile Settings ───────────────────────────────────────
 
-function PlaceholderTab({ title, description }: { title: string; description: string }) {
+type WorkspaceMember = {
+  userId: string;
+  workspaceId: string;
+  role: "owner" | "admin" | "operator" | "viewer";
+  email: string;
+  createdAt: string;
+};
+
+type WorkspaceInviteSummary = {
+  id: string;
+  workspaceId: string;
+  role: WorkspaceMember["role"];
+  expiresAt: string;
+  acceptedAt?: string;
+  createdAt: string;
+};
+
+function activeWorkspace(workspaces: WorkspaceSummary[], activeWorkspaceId: string | null) {
+  return workspaces.find((workspace) => workspace.id === activeWorkspaceId) || workspaces[0] || null;
+}
+
+function CompanyProfileTab() {
+  const workspaces = useAppStore((state) => state.workspaces);
+  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
+  const refreshWorkspaces = useAppStore((state) => state.refreshWorkspaces);
+  const workspace = activeWorkspace(workspaces, activeWorkspaceId);
+  const [draft, setDraft] = useState<WorkspaceSummary | null>(workspace);
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [inviteRole, setInviteRole] = useState<WorkspaceMember["role"]>("operator");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(workspace);
+  }, [workspace]);
+
+  async function saveCompany() {
+    if (!draft) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/workspaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(draft),
+      });
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to save workspace profile");
+      await refreshWorkspaces();
+      setMessage("Workspace profile saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to save workspace profile");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createInvite() {
+    setMessage(null);
+    const res = await fetch("/api/workspaces/invites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ role: inviteRole, expiresInDays: 7 }),
+    });
+    const data = await res.json().catch(() => ({})) as { url?: string; error?: string };
+    if (!res.ok || !data.url) {
+      setMessage(data.error || "Failed to create invite");
+      return;
+    }
+    setInviteUrl(data.url);
+    setMessage("Invite link created.");
+  }
+
+  if (!draft) {
+    return <EmptySettingsState title="Company" description="No workspace is selected." />;
+  }
+
+  const profile = draft.profileSettings || {};
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1.4fr_0.8fr]">
+      <div className="clean-card p-6 space-y-4">
+        <div>
+          <h3 className="text-base font-medium text-foreground">Profile Settings</h3>
+          <p className="text-[11px] text-stone">Workspace company profile stored in Supabase.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SettingsInput label="Workspace name" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
+          <SettingsInput label="Company name" value={profile.companyName || ""} onChange={(companyName) => setDraft({ ...draft, profileSettings: { ...profile, companyName } })} />
+          <SettingsInput label="Website" value={profile.website || ""} onChange={(website) => setDraft({ ...draft, profileSettings: { ...profile, website } })} />
+          <SettingsInput label="Industry" value={profile.industry || ""} onChange={(industry) => setDraft({ ...draft, profileSettings: { ...profile, industry } })} />
+          <SettingsInput label="Company size" value={profile.size || ""} onChange={(size) => setDraft({ ...draft, profileSettings: { ...profile, size } })} />
+          <SettingsInput label="Niche" value={draft.niche || ""} onChange={(niche) => setDraft({ ...draft, niche })} />
+        </div>
+        <label className="block text-sm">
+          <span className="text-[11px] uppercase tracking-[0.18em] text-stone">Description</span>
+          <textarea
+            className="mt-1 min-h-24 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            value={profile.description || ""}
+            onChange={(event) => setDraft({ ...draft, profileSettings: { ...profile, description: event.target.value } })}
+          />
+        </label>
+        <button onClick={saveCompany} disabled={saving} className="btn-primary">
+          {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          Save profile
+        </button>
+        {message ? <p className="text-xs text-stone">{message}</p> : null}
+      </div>
+      <div className="clean-card p-6 space-y-4">
+        <div>
+          <h3 className="text-base font-medium text-foreground">Workspace Access</h3>
+          <p className="text-[11px] text-stone">Invite links grant access only to this workspace.</p>
+        </div>
+        <div className="rounded-xl border border-border bg-muted/20 p-3 text-xs text-stone">
+          <p><span className="text-foreground">Current workspace:</span> {draft.name}</p>
+          <p><span className="text-foreground">Workspace ID:</span> {draft.id}</p>
+          <p><span className="text-foreground">Slug:</span> {draft.slug || "—"}</p>
+        </div>
+        <label className="block text-sm">
+          <span className="text-[11px] uppercase tracking-[0.18em] text-stone">Invite role</span>
+          <select
+            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            value={inviteRole}
+            onChange={(event) => setInviteRole(event.target.value as WorkspaceMember["role"])}
+          >
+            <option value="operator">Operator</option>
+            <option value="viewer">Viewer</option>
+            <option value="admin">Admin</option>
+          </select>
+        </label>
+        <button onClick={createInvite} className="btn-secondary">
+          <Send className="size-4" />
+          Create invite link
+        </button>
+        {inviteUrl ? (
+          <input readOnly className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs" value={inviteUrl} onFocus={(event) => event.currentTarget.select()} />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function AccountProfileTab() {
+  const user = useAppStore((state) => state.user);
+  const workspaces = useAppStore((state) => state.workspaces);
+  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
+  const primarySeat = useAppStore((state) => state.primarySeat);
+  const refreshSession = useAppStore((state) => state.refreshSession);
+  const workspace = activeWorkspace(workspaces, activeWorkspaceId);
+  const [displayName, setDisplayName] = useState(user?.displayName || "");
+  const [title, setTitle] = useState(user?.profileSettings?.title || "");
+  const [timezone, setTimezone] = useState(user?.profileSettings?.timezone || "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDisplayName(user?.displayName || "");
+    setTitle(user?.profileSettings?.title || "");
+    setTimezone(user?.profileSettings?.timezone || "");
+  }, [user]);
+
+  async function saveAccount() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ displayName, profileSettings: { title, timezone } }),
+      });
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to save account profile");
+      await refreshSession();
+      setMessage("Account profile saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to save account profile");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <div className="clean-card p-6 space-y-4">
+        <h3 className="text-base font-medium text-foreground">Account Profile</h3>
+        <SettingsInput label="Display name" value={displayName} onChange={setDisplayName} />
+        <SettingsInput label="Email" value={user?.email || ""} onChange={() => undefined} disabled />
+        <SettingsInput label="Title" value={title} onChange={setTitle} />
+        <SettingsInput label="Timezone" value={timezone} onChange={setTimezone} placeholder="Europe/Lisbon" />
+        <button onClick={saveAccount} disabled={saving} className="btn-primary">
+          {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          Save account
+        </button>
+        {message ? <p className="text-xs text-stone">{message}</p> : null}
+      </div>
+      <div className="clean-card p-6 space-y-4">
+        <h3 className="text-base font-medium text-foreground">Current Workspace Detail</h3>
+        <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
+          <p className="font-medium text-foreground">{workspace?.name || "No workspace"}</p>
+          <p className="text-xs text-stone">{workspace?.id || "—"}</p>
+        </div>
+        <h3 className="text-base font-medium text-foreground">Current LinkedIn Account</h3>
+        <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
+          <p className="font-medium text-foreground">{primarySeat?.profileName || primarySeat?.name || "No LinkedIn account connected"}</p>
+          <p className="text-xs text-stone">{primarySeat?.workspaceId || workspace?.name || "—"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrganizationTab() {
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [invites, setInvites] = useState<WorkspaceInviteSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/workspaces/members", { credentials: "include" }).then((res) => res.json()),
+      fetch("/api/workspaces/invites", { credentials: "include" }).then((res) => res.json()),
+    ])
+      .then(([memberData, inviteData]) => {
+        setMembers(memberData.members || []);
+        setInvites(inviteData.invites || []);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <EmptySettingsState title="Organization" description="Loading workspace members..." />;
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <div className="clean-card p-6">
+        <h3 className="text-base font-medium text-foreground mb-4">Workspace Members</h3>
+        <div className="space-y-2">
+          {members.map((member) => (
+            <div key={`${member.workspaceId}:${member.userId}`} className="flex items-center justify-between rounded-xl border border-border p-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">{member.email || member.userId}</p>
+                <p className="text-xs text-stone">{member.userId}</p>
+              </div>
+              <span className="rounded-full bg-muted px-2 py-1 text-xs capitalize text-stone">{member.role}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="clean-card p-6">
+        <h3 className="text-base font-medium text-foreground mb-4">Recent Invites</h3>
+        <div className="space-y-2">
+          {invites.length === 0 ? <p className="text-xs text-stone">No invite links yet.</p> : null}
+          {invites.map((invite) => (
+            <div key={invite.id} className="rounded-xl border border-border p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-medium capitalize text-foreground">{invite.role}</span>
+                <span className="text-xs text-stone">{invite.acceptedAt ? "Accepted" : "Open"}</span>
+              </div>
+              <p className="mt-1 text-xs text-stone">Expires {formatShortDateTime(invite.expiresAt)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsInput({
+  label,
+  value,
+  onChange,
+  disabled,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block text-sm">
+      <span className="text-[11px] uppercase tracking-[0.18em] text-stone">{label}</span>
+      <input
+        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm disabled:opacity-60"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        placeholder={placeholder}
+      />
+    </label>
+  );
+}
+
+function EmptySettingsState({ title, description }: { title: string; description: string }) {
   return (
     <div className="clean-card p-12 text-center">
       <Settings className="size-10 mx-auto mb-4 text-stone opacity-20" />

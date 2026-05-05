@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Loader2,
@@ -21,19 +22,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Campaign, CampaignStats } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 type CampaignWithStats = Campaign & { stats: CampaignStats };
 
 // ── Main ────────────────────────────────────────────────────────────────
 
 export default function CampaignsPage() {
+  const router = useRouter();
   const [campaigns, setCampaigns] = useState<CampaignWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   function loadCampaigns() {
     setLoading(true);
-    fetch("/api/campaigns")
+    apiFetch("/api/campaigns")
       .then((r) => r.json())
       .then((d) => setCampaigns(d.campaigns || []))
       .catch(() => {})
@@ -44,10 +49,68 @@ export default function CampaignsPage() {
     loadCampaigns();
   }, []);
 
+  async function handleNewCampaign() {
+    setCreateError(null);
+    setCreating(true);
+    try {
+      const agentsRes = await apiFetch("/api/agent");
+      const agentsBody = await agentsRes.json().catch(() => ({}));
+      const agents = (agentsBody.agents || []) as { id: string }[];
+      if (!agentsRes.ok || agents.length === 0) {
+        setCreateError("Create an AI Agent first — every campaign requires one.");
+        return;
+      }
+      const agentId = agents[0].id;
+
+      const res = await apiFetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId,
+          name: `Campaign ${new Date().toISOString().slice(0, 10)}`,
+          status: "draft",
+          segment: "default",
+          search: {
+            keywords: "",
+            titleFilter: "",
+            language: "en",
+            locations: [],
+          },
+          sequence: [
+            {
+              step: 1,
+              type: "connection_request",
+              delayDays: 0,
+              trigger: "immediate",
+              content: "Hi {{first_name}}, I'd like to connect.",
+            },
+            {
+              step: 2,
+              type: "message",
+              delayDays: 1,
+              trigger: "accepted",
+              content: "Thanks for connecting, {{first_name}}.",
+            },
+          ],
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCreateError(typeof body.error === "string" ? body.error : "Failed to create campaign");
+        return;
+      }
+      const id = body.campaign?.id as string | undefined;
+      if (id) router.push(`/campaigns/${id}`);
+      else loadCampaigns();
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function runCampaignAction(id: string, action: "toggle" | "duplicate" | "delete") {
     setBusyId(id);
     try {
-      const res = await fetch("/api/campaigns", {
+      const res = await apiFetch("/api/campaigns", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -83,9 +146,19 @@ export default function CampaignsPage() {
           <p className="text-sm text-stone mt-1">
             Manage your outreach sequences
           </p>
+          {createError ? (
+            <p className="text-sm text-destructive mt-2">{createError}</p>
+          ) : null}
         </div>
-        <Button size="sm" className="gap-1.5 bg-brand text-white hover:bg-brand-hover">
-          <Plus className="size-3.5" /> New campaign
+        <Button
+          type="button"
+          size="sm"
+          className="gap-1.5 bg-brand text-white hover:bg-brand-hover"
+          disabled={creating}
+          onClick={() => void handleNewCampaign()}
+        >
+          {creating ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+          New campaign
         </Button>
       </div>
 

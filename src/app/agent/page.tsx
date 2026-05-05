@@ -643,16 +643,21 @@ function AgentEditor({
   const [step, setStep] = useState(0);
   const [config, setConfig] = useState<AgentConfig>(agent);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSave() {
-    await fetch("/api/agent", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(config),
-    });
-    setSaved(true);
-    onSave(config);
-    setTimeout(() => setSaved(false), 2000);
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(config);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save agent");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -686,6 +691,11 @@ function AgentEditor({
           ))}
         </div>
       </div>
+      {error ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      ) : null}
 
       <div className="flex gap-6">
         {/* Step sidebar */}
@@ -749,9 +759,14 @@ function AgentEditor({
             ) : (
               <Button
                 onClick={handleSave}
+                disabled={saving}
                 className={saved ? "bg-success hover:bg-success text-white" : "bg-brand text-white hover:bg-brand-hover"}
               >
-                {saved ? (
+                {saving ? (
+                  <>
+                    <Loader2 className="size-4 mr-1.5 animate-spin" /> Saving...
+                  </>
+                ) : saved ? (
                   <>
                     <Check className="size-4 mr-1.5" /> Saved
                   </>
@@ -774,10 +789,46 @@ export default function AgentPage() {
   const [editing, setEditing] = useState<AgentConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAgentId, setSavingAgentId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function newAgentDraft(): AgentConfig {
+    return {
+      name: `Signal Agent ${agents.length + 1}`,
+      status: "draft",
+      icp: {
+        jobTitles: [],
+        locations: [],
+        industries: [],
+        companySizes: [],
+        excludeKeywords: [],
+        matchingMode: "discovery",
+      },
+      signals: {
+        companyPage: "",
+        personalProfile: "",
+        trackProfileVisitors: false,
+        trackCompanyFollowers: false,
+        engagementKeywords: [],
+        watchProfiles: [],
+        neverTargetProfiles: [],
+        triggerEvents: {
+          topActiveProfiles: false,
+          recentFunding: false,
+          jobChanges: false,
+        },
+        competitorPages: [],
+      },
+      leads: {
+        autoAddToList: true,
+        listName: "",
+      },
+    };
+  }
 
   async function persistAgent(nextAgent: AgentConfig) {
     const agentKey = nextAgent.id || nextAgent.name;
     setSavingAgentId(agentKey);
+    setError(null);
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -790,20 +841,25 @@ export default function AgentPage() {
       }
       const saved = (body.agent || nextAgent) as AgentConfig;
       setAgents((prev) =>
-        prev.map((agent) =>
-          (agent.id || agent.name) === agentKey
-            ? {
-                ...agent,
-                ...saved,
-                signals: {
-                  ...agent.signals,
-                  ...(saved.signals || {}),
-                },
-              }
-            : agent
-        )
+        prev.some((agent) => (agent.id || agent.name) === agentKey)
+          ? prev.map((agent) =>
+              (agent.id || agent.name) === agentKey
+                ? {
+                    ...agent,
+                    ...saved,
+                    signals: {
+                      ...agent.signals,
+                      ...(saved.signals || {}),
+                    },
+                  }
+                : agent
+            )
+          : [...prev, saved]
       );
       return saved;
+    } catch (persistError) {
+      setError(persistError instanceof Error ? persistError.message : "Failed to save agent");
+      throw persistError;
     } finally {
       setSavingAgentId(null);
     }
@@ -880,13 +936,22 @@ export default function AgentPage() {
                 </p>
               </div>
             </div>
-            <Button size="sm" className="gap-2 px-5 py-5 rounded-xl bg-brand text-white hover:bg-brand-hover text-[10px] font-medium uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95">
+            <Button
+              size="sm"
+              onClick={() => setEditing(newAgentDraft())}
+              className="gap-2 px-5 py-5 rounded-xl bg-brand text-white hover:bg-brand-hover text-[10px] font-medium uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95"
+            >
               <Plus className="size-4" />
               Launch Agent
             </Button>
           </div>
         </div>
       </div>
+      {error ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      ) : null}
 
       {/* Agent table */}
       <div className="clean-card overflow-hidden">
@@ -896,6 +961,13 @@ export default function AgentPage() {
           <span className="text-right">Control Deck</span>
         </div>
         <div className="divide-y divide-border">
+          {agents.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <Bot className="mx-auto mb-3 size-8 text-stone opacity-40" />
+              <p className="text-sm font-medium text-foreground">No signal agents yet</p>
+              <p className="mt-1 text-xs text-stone">Click Launch Agent to configure your first ICP and signals.</p>
+            </div>
+          ) : null}
           {agents.map((agent) => {
             const agentKey = agent.id || agent.name;
             const statusDotClass =

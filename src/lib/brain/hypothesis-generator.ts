@@ -1,11 +1,10 @@
 /**
  * Brain v1 — Hypothesis Generator
  *
- * Uses Claude to analyze Brain v0 patterns and propose experiments.
+ * Uses OpenRouter (default: ~anthropic/claude-haiku-latest) to analyze Brain v0 patterns and propose experiments.
  * v1.5 scope: mutate one current template into a single challenger variant.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import * as store from "../store";
 import type { BrainSnapshot, BrainExperiment, Agent, Campaign, ConversionMetrics, Lead, TemplateWeights } from "../types";
 import { generateExperimentId } from "./experiment-store";
@@ -13,7 +12,7 @@ import { detectTemplateIndex } from "./analyzer";
 import { CONNECT_MATURATION_DAYS } from "./constants";
 import { hashTemplate } from "./template-utils";
 
-const client = new Anthropic();
+import { openRouterComplete } from "./openrouter";
 
 const SYSTEM_PROMPT = `You are a growth experiment scientist for LinkedIn outreach optimization.
 
@@ -70,15 +69,15 @@ function parseHypothesisPayload(text: string): HypothesisPayload {
   const parsed = JSON.parse(jsonStr) as Partial<HypothesisPayload>;
 
   if (!parsed || typeof parsed !== "object") {
-    throw new Error("Claude returned an invalid payload");
+    throw new Error("Model returned an invalid payload");
   }
 
   if (typeof parsed.hypothesis !== "string" || !parsed.hypothesis.trim()) {
-    throw new Error("Claude response is missing a valid hypothesis");
+    throw new Error("Model response is missing a valid hypothesis");
   }
 
   if (typeof parsed.reasoning !== "string" || !parsed.reasoning.trim()) {
-    throw new Error("Claude response is missing valid reasoning");
+    throw new Error("Model response is missing valid reasoning");
   }
 
   return {
@@ -118,7 +117,7 @@ function validateChallengerTemplate(
   agent: Agent,
 ): string {
   const normalized = normalizeTemplateText(challengerTemplate);
-  if (!normalized) throw new Error("Claude response is missing a challenger template");
+  if (!normalized) throw new Error("Model response is missing a challenger template");
   if (normalized.includes("```")) throw new Error("Challenger template must not contain markdown fences");
 
   const controlPlaceholders = extractPlaceholderKeys(controlTemplate);
@@ -286,21 +285,12 @@ Il control e' gia' stato scelto dal sistema: devi proporre solo il challenger.
 Mantieni esattamente questi placeholder: ${extractPlaceholderKeys(controlTemplate).join(", ") || "nessuno"}.
 Rispondi SOLO con il JSON, nessun altro testo.`;
 
-  const response = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+  /** Previously (Anthropic Messages API): claude-haiku-4-5-20251001. Now via OpenRouter (default: ~anthropic/claude-haiku-latest). */
+  const text = await openRouterComplete({
     system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userPrompt }],
+    user: userPrompt,
+    maxTokens: 1024,
   });
-
-  const text = response.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("\n")
-    .trim();
-  if (!text) {
-    throw new Error("Claude returned an empty response");
-  }
 
   const parsed = parseHypothesisPayload(text);
   const challengerTemplate = validateChallengerTemplate(parsed.challengerTemplate, controlTemplate, campaign, agent);

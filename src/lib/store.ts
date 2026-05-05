@@ -7,6 +7,8 @@ import type {
   Lead,
   LeadStatus,
   LinkedInSeat,
+  DashboardPeriod,
+  DashboardSnapshot,
   SignalCandidate,
   SignalCandidateStatus,
   SignalKind,
@@ -167,6 +169,23 @@ export async function getAllLeads(opts: { status?: LeadStatus; workspaceId?: str
 
 export async function getDashboardStats(workspaceId?: string) {
   return backend().getDashboardStats(workspaceId);
+}
+
+export async function getDashboardSnapshot(
+  workspaceId: string,
+  period: DashboardPeriod,
+): Promise<DashboardSnapshot | null> {
+  if ("getDashboardSnapshot" in backend()) {
+    return backend().getDashboardSnapshot(workspaceId, period);
+  }
+  return null;
+}
+
+export async function saveDashboardSnapshot(snapshot: DashboardSnapshot): Promise<DashboardSnapshot> {
+  if ("saveDashboardSnapshot" in backend()) {
+    return backend().saveDashboardSnapshot(snapshot);
+  }
+  return snapshot;
 }
 
 export async function saveDiscoveryRun(run: DiscoveryRun): Promise<void> {

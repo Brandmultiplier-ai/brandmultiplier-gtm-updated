@@ -3,6 +3,8 @@ import type {
   Campaign,
   CampaignStats,
   ContactList,
+  DashboardPeriod,
+  DashboardSnapshot,
   DiscoveryRun,
   Lead,
   LeadStatus,
@@ -78,6 +80,7 @@ type WorkspaceRow = {
   status: Workspace["status"];
   niche: string;
   default_language: Workspace["defaultLanguage"];
+  profile_settings?: unknown;
   channels: unknown;
   created_at: string;
   updated_at: string;
@@ -249,6 +252,13 @@ type WebhookEventRow = {
   payload: Record<string, unknown> | null;
 };
 
+type DashboardSnapshotRow = {
+  workspace_id: string;
+  period: DashboardPeriod;
+  payload: unknown;
+  computed_at: string;
+};
+
 function mapWorkspace(row: WorkspaceRow): Workspace {
   return {
     id: row.id,
@@ -257,9 +267,19 @@ function mapWorkspace(row: WorkspaceRow): Workspace {
     status: row.status,
     niche: row.niche,
     defaultLanguage: row.default_language,
+    profileSettings: maybeRecord(row.profile_settings, {}),
     channels: maybeRecord(row.channels, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapDashboardSnapshot(row: DashboardSnapshotRow): DashboardSnapshot {
+  return {
+    workspaceId: row.workspace_id,
+    period: row.period,
+    payload: maybeRecord(row.payload, {}),
+    computedAt: row.computed_at,
   };
 }
 
@@ -271,6 +291,7 @@ function workspaceToRow(workspace: Workspace): WorkspaceRow {
     status: workspace.status,
     niche: workspace.niche,
     default_language: workspace.defaultLanguage,
+    profile_settings: workspace.profileSettings || {},
     channels: workspace.channels || {},
     created_at: workspace.createdAt,
     updated_at: workspace.updatedAt,
@@ -816,6 +837,7 @@ export async function saveWorkspace(workspace: Workspace): Promise<Workspace> {
     status: workspace.status || existing?.status || "active",
     niche: workspace.niche || existing?.niche || "general",
     defaultLanguage: workspace.defaultLanguage || existing?.defaultLanguage || "en",
+    profileSettings: workspace.profileSettings || existing?.profileSettings || {},
     channels: workspace.channels || existing?.channels || {},
     createdAt: workspace.createdAt || existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -1356,6 +1378,41 @@ export async function getDashboardStats(workspaceId?: string): Promise<{
     connectRate: contacted.length > 0 ? Math.round((accepted.length / contacted.length) * 100) : 0,
     replyRate: contacted.length > 0 ? Math.round((replied.length / contacted.length) * 100) : 0,
   };
+}
+
+export async function getDashboardSnapshot(
+  workspaceId: string,
+  period: DashboardPeriod,
+): Promise<DashboardSnapshot | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("dashboard_snapshots")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("period", period)
+    .maybeSingle<DashboardSnapshotRow>();
+  ensureNoError(error, `getDashboardSnapshot(${workspaceId}, ${period})`);
+  return data ? mapDashboardSnapshot(data) : null;
+}
+
+export async function saveDashboardSnapshot(snapshot: DashboardSnapshot): Promise<DashboardSnapshot> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("dashboard_snapshots")
+    .upsert(
+      {
+        workspace_id: snapshot.workspaceId,
+        period: snapshot.period,
+        payload: snapshot.payload,
+        computed_at: snapshot.computedAt,
+      },
+      { onConflict: "workspace_id,period" },
+    )
+    .select("*")
+    .single<DashboardSnapshotRow>();
+  ensureNoError(error, `saveDashboardSnapshot(${snapshot.workspaceId}, ${snapshot.period})`);
+  if (!data) throw new Error("saveDashboardSnapshot: missing row");
+  return mapDashboardSnapshot(data);
 }
 
 export async function saveDiscoveryRun(run: DiscoveryRun): Promise<void> {

@@ -14,6 +14,8 @@ import type {
   Campaign,
   CampaignStats,
   ContactList,
+  DashboardPeriod,
+  DashboardSnapshot,
   DiscoveryRun,
   Lead,
   LeadStatus,
@@ -121,6 +123,10 @@ function workspaceLinkedInSeatsPath(workspaceId?: string): string {
   return join(workspaceStateDir(workspaceId), "linkedin-seats.json");
 }
 
+function workspaceDashboardSnapshotsPath(workspaceId?: string): string {
+  return join(workspaceStateDir(workspaceId), "dashboard-snapshots.json");
+}
+
 // ── ID generation ──────────────────────────────────────────────────────
 
 function nanoid(prefix: string): string {
@@ -155,6 +161,7 @@ export function saveWorkspace(workspace: Workspace): Workspace {
     status: workspace.status || existing?.status || "active",
     niche: workspace.niche || existing?.niche || "general",
     defaultLanguage: workspace.defaultLanguage || existing?.defaultLanguage || "en",
+    profileSettings: workspace.profileSettings || existing?.profileSettings || {},
     channels: workspace.channels || existing?.channels || {},
     createdAt: workspace.createdAt || existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -754,6 +761,25 @@ export function getDashboardStats(workspaceId?: string): {
     connectRate: contacted.length > 0 ? Math.round((accepted.length / contacted.length) * 100) : 0,
     replyRate: contacted.length > 0 ? Math.round((replied.length / contacted.length) * 100) : 0,
   };
+}
+
+export function getDashboardSnapshot(
+  workspaceId: string,
+  period: DashboardPeriod,
+): DashboardSnapshot | null {
+  const snapshots = readJson<DashboardSnapshot[]>(workspaceDashboardSnapshotsPath(workspaceId)) || [];
+  return snapshots.find((snapshot) => snapshot.workspaceId === workspaceId && snapshot.period === period) || null;
+}
+
+export function saveDashboardSnapshot(snapshot: DashboardSnapshot): DashboardSnapshot {
+  const path = workspaceDashboardSnapshotsPath(snapshot.workspaceId);
+  const snapshots = readJson<DashboardSnapshot[]>(path) || [];
+  const next = [
+    snapshot,
+    ...snapshots.filter((item) => !(item.workspaceId === snapshot.workspaceId && item.period === snapshot.period)),
+  ];
+  writeJson(path, next);
+  return snapshot;
 }
 
 // ── Discovery Runs ─────────────────────────────────────────────────────

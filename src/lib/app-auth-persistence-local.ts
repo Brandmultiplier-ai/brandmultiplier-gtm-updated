@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import * as store from "./store";
 import { dataPath } from "./data-paths";
-import type { AppUser, WorkspaceMembership, WorkspaceRole } from "./types";
+import type { AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
 import { normalizeAppEmail } from "./auth/email";
 
 const AUTH_FILE = () => dataPath("app-auth.json");
@@ -12,6 +12,8 @@ type AuthFile = {
     id: string;
     email: string;
     passwordHash: string;
+    displayName?: string;
+    profileSettings?: AppUser["profileSettings"];
     createdAt: string;
     updatedAt: string;
   }>;
@@ -19,6 +21,17 @@ type AuthFile = {
     userId: string;
     workspaceId: string;
     role: WorkspaceRole;
+    createdAt: string;
+  }>;
+  invites?: Array<{
+    id: string;
+    workspaceId: string;
+    tokenHash: string;
+    role: WorkspaceRole;
+    createdByUserId?: string;
+    acceptedByUserId?: string;
+    expiresAt: string;
+    acceptedAt?: string;
     createdAt: string;
   }>;
 };
@@ -46,6 +59,8 @@ function mapUser(row: AuthFile["users"][0]): AppUser {
   return {
     id: row.id,
     email: row.email,
+    displayName: row.displayName,
+    profileSettings: row.profileSettings || {},
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -58,6 +73,10 @@ function mapM(row: AuthFile["memberships"][0]): WorkspaceMembership {
     role: row.role,
     createdAt: row.createdAt,
   };
+}
+
+function mapInvite(row: NonNullable<AuthFile["invites"]>[0]): WorkspaceInvite {
+  return { ...row };
 }
 
 export async function getAppUserById(id: string): Promise<AppUser | null> {
@@ -91,10 +110,35 @@ export async function createAppUser(email: string, passwordHash: string): Promis
   }
   const now = new Date().toISOString();
   const id = `usr_${[...Array(8)].map(() => "abcdefghijklmnopqrstuvwxyz0123456789".charAt(Math.floor(Math.random() * 36))).join("")}`;
-  const row = { id, email: n, passwordHash, createdAt: now, updatedAt: now };
+  const row = {
+    id,
+    email: n,
+    passwordHash,
+    displayName: n.split("@")[0],
+    profileSettings: {},
+    createdAt: now,
+    updatedAt: now,
+  };
   auth.users.push(row);
   writeAuth(auth);
   return mapUser(row);
+}
+
+export async function updateAppUserProfile(
+  userId: string,
+  patch: Pick<AppUser, "displayName" | "profileSettings">,
+): Promise<AppUser> {
+  const auth = readAuth();
+  const idx = auth.users.findIndex((u) => u.id === userId);
+  if (idx < 0) throw new Error("User not found");
+  auth.users[idx] = {
+    ...auth.users[idx],
+    displayName: patch.displayName,
+    profileSettings: patch.profileSettings || {},
+    updatedAt: new Date().toISOString(),
+  };
+  writeAuth(auth);
+  return mapUser(auth.users[idx]);
 }
 
 export async function countAppUsers(): Promise<number> {
@@ -157,6 +201,45 @@ export async function deleteWorkspaceMembership(
     (m) => !(m.userId === userId && m.workspaceId === workspaceId),
   );
   writeAuth(auth);
+}
+
+export async function createWorkspaceInvite(
+  invite: Omit<WorkspaceInvite, "createdAt" | "acceptedAt" | "acceptedByUserId">,
+): Promise<WorkspaceInvite> {
+  const auth = readAuth();
+  const row = { ...invite, createdAt: new Date().toISOString() };
+  auth.invites = [row, ...(auth.invites || [])];
+  writeAuth(auth);
+  return mapInvite(row);
+}
+
+export async function getWorkspaceInviteByTokenHash(tokenHash: string): Promise<WorkspaceInvite | null> {
+  const invite = (readAuth().invites || []).find((row) => row.tokenHash === tokenHash);
+  return invite ? mapInvite(invite) : null;
+}
+
+export async function listWorkspaceInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
+  return (readAuth().invites || [])
+    .filter((row) => row.workspaceId === workspaceId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map(mapInvite);
+}
+
+export async function markWorkspaceInviteAccepted(
+  inviteId: string,
+  userId: string,
+): Promise<WorkspaceInvite> {
+  const auth = readAuth();
+  auth.invites = auth.invites || [];
+  const idx = auth.invites.findIndex((row) => row.id === inviteId);
+  if (idx < 0) throw new Error("Invite not found");
+  auth.invites[idx] = {
+    ...auth.invites[idx],
+    acceptedByUserId: userId,
+    acceptedAt: new Date().toISOString(),
+  };
+  writeAuth(auth);
+  return mapInvite(auth.invites[idx]);
 }
 
 export async function ensureDefaultMembershipsForAllWorkspaces(

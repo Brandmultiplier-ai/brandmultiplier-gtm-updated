@@ -1,11 +1,13 @@
 import { getSupabaseAdminClient } from "./supabase/admin";
-import type { AppUser, WorkspaceMembership, WorkspaceRole } from "./types";
+import type { AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
 import { normalizeAppEmail } from "./auth/email";
 import * as store from "./store";
 
 type UserRow = {
   id: string;
   email: string;
+  display_name: string | null;
+  profile_settings: unknown;
   created_at: string;
   updated_at: string;
 };
@@ -17,10 +19,28 @@ type MembershipRow = {
   created_at: string;
 };
 
+type InviteRow = {
+  id: string;
+  workspace_id: string;
+  token_hash: string;
+  role: WorkspaceRole;
+  created_by_user_id: string | null;
+  accepted_by_user_id: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+};
+
+function maybeRecord<T extends Record<string, unknown>>(value: unknown, fallback: T): T {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as T : fallback;
+}
+
 function mapUser(r: UserRow): AppUser {
   return {
     id: r.id,
     email: r.email,
+    displayName: r.display_name || undefined,
+    profileSettings: maybeRecord(r.profile_settings, {}),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -31,6 +51,20 @@ function mapM(r: MembershipRow): WorkspaceMembership {
     userId: r.user_id,
     workspaceId: r.workspace_id,
     role: r.role,
+    createdAt: r.created_at,
+  };
+}
+
+function mapInvite(r: InviteRow): WorkspaceInvite {
+  return {
+    id: r.id,
+    workspaceId: r.workspace_id,
+    tokenHash: r.token_hash,
+    role: r.role,
+    createdByUserId: r.created_by_user_id || undefined,
+    acceptedByUserId: r.accepted_by_user_id || undefined,
+    expiresAt: r.expires_at,
+    acceptedAt: r.accepted_at || undefined,
     createdAt: r.created_at,
   };
 }
@@ -72,6 +106,8 @@ export async function getAppUserWithHashByEmail(
     .maybeSingle<{
       id: string;
       email: string;
+      display_name: string | null;
+      profile_settings: unknown;
       password_hash: string;
       created_at: string;
       updated_at: string;
@@ -81,6 +117,8 @@ export async function getAppUserWithHashByEmail(
   return {
     id: data.id,
     email: data.email,
+    displayName: data.display_name || undefined,
+    profileSettings: maybeRecord(data.profile_settings, {}),
     createdAt: data.created_at,
     updatedAt: data.updated_at,
     passwordHash: data.password_hash,
@@ -95,10 +133,35 @@ export async function createAppUser(
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("app_users")
-    .insert({ email: n, password_hash: passwordHash, updated_at: new Date().toISOString() })
+    .insert({
+      email: n,
+      password_hash: passwordHash,
+      display_name: n.split("@")[0],
+      profile_settings: {},
+      updated_at: new Date().toISOString(),
+    })
     .select("*")
     .single();
   ensureNoError(error, "createAppUser");
+  return mapUser(data as UserRow);
+}
+
+export async function updateAppUserProfile(
+  userId: string,
+  patch: Pick<AppUser, "displayName" | "profileSettings">,
+): Promise<AppUser> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("app_users")
+    .update({
+      display_name: patch.displayName || null,
+      profile_settings: patch.profileSettings || {},
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId)
+    .select("*")
+    .single();
+  ensureNoError(error, "updateAppUserProfile");
   return mapUser(data as UserRow);
 }
 
@@ -196,6 +259,66 @@ export async function deleteWorkspaceMembership(
     .eq("user_id", userId)
     .eq("workspace_id", workspaceId);
   ensureNoError(error, "deleteWorkspaceMembership");
+}
+
+export async function createWorkspaceInvite(
+  invite: Omit<WorkspaceInvite, "createdAt" | "acceptedAt" | "acceptedByUserId">,
+): Promise<WorkspaceInvite> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("workspace_invites")
+    .insert({
+      id: invite.id,
+      workspace_id: invite.workspaceId,
+      token_hash: invite.tokenHash,
+      role: invite.role,
+      created_by_user_id: invite.createdByUserId || null,
+      expires_at: invite.expiresAt,
+    })
+    .select("*")
+    .single();
+  ensureNoError(error, "createWorkspaceInvite");
+  return mapInvite(data as InviteRow);
+}
+
+export async function getWorkspaceInviteByTokenHash(tokenHash: string): Promise<WorkspaceInvite | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("workspace_invites")
+    .select("*")
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+  ensureNoError(error, "getWorkspaceInviteByTokenHash");
+  return data ? mapInvite(data as InviteRow) : null;
+}
+
+export async function listWorkspaceInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("workspace_invites")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false });
+  ensureNoError(error, "listWorkspaceInvites");
+  return (data as InviteRow[] | null)?.map(mapInvite) || [];
+}
+
+export async function markWorkspaceInviteAccepted(
+  inviteId: string,
+  userId: string,
+): Promise<WorkspaceInvite> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("workspace_invites")
+    .update({
+      accepted_by_user_id: userId,
+      accepted_at: new Date().toISOString(),
+    })
+    .eq("id", inviteId)
+    .select("*")
+    .single();
+  ensureNoError(error, "markWorkspaceInviteAccepted");
+  return mapInvite(data as InviteRow);
 }
 
 export async function ensureDefaultMembershipsForAllWorkspaces(

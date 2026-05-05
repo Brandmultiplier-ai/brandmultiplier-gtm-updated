@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch } from "@/lib/api-client";
 import {
   Play,
   Zap,
@@ -61,7 +62,7 @@ export default function OutreachPage() {
   const [pastRuns, setPastRuns] = useState<RunLog[]>([]);
 
   useEffect(() => {
-    fetch("/api/outreach")
+    apiFetch("/api/outreach")
       .then((r) => r.json())
       .then((d) => setPastRuns(d.runs || []))
       .catch(() => {});
@@ -77,7 +78,7 @@ export default function OutreachPage() {
     if (segment !== "all") body.segment = segment;
 
     try {
-      const res = await fetch("/api/outreach", {
+      const res = await apiFetch("/api/outreach", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

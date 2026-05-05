@@ -1,4 +1,4 @@
-import type { AppUser, WorkspaceMembership, WorkspaceRole } from "./types";
+import type { AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
 import { isSupabaseStorageEnabled } from "./storage-mode";
 import * as local from "./app-auth-persistence-local";
 import * as supa from "./app-auth-persistence-supabase";
@@ -28,6 +28,13 @@ export async function createAppUser(
   passwordHash: string,
 ): Promise<AppUser> {
   return backend().createAppUser(email, passwordHash);
+}
+
+export async function updateAppUserProfile(
+  userId: string,
+  patch: Pick<AppUser, "displayName" | "profileSettings">,
+): Promise<AppUser> {
+  return backend().updateAppUserProfile(userId, patch);
 }
 
 export async function countAppUsers(): Promise<number> {
@@ -64,6 +71,27 @@ export async function deleteWorkspaceMembership(
   workspaceId: string,
 ): Promise<void> {
   return backend().deleteWorkspaceMembership(userId, workspaceId);
+}
+
+export async function createWorkspaceInvite(
+  invite: Omit<WorkspaceInvite, "createdAt" | "acceptedAt" | "acceptedByUserId">,
+): Promise<WorkspaceInvite> {
+  return backend().createWorkspaceInvite(invite);
+}
+
+export async function getWorkspaceInviteByTokenHash(tokenHash: string): Promise<WorkspaceInvite | null> {
+  return backend().getWorkspaceInviteByTokenHash(tokenHash);
+}
+
+export async function listWorkspaceInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
+  return backend().listWorkspaceInvites(workspaceId);
+}
+
+export async function markWorkspaceInviteAccepted(
+  inviteId: string,
+  userId: string,
+): Promise<WorkspaceInvite> {
+  return backend().markWorkspaceInviteAccepted(inviteId, userId);
 }
 
 export async function ensureDefaultMembershipsForAllWorkspaces(

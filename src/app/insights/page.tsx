@@ -67,6 +67,7 @@ interface InsightsData {
     leadsGenerated: number;
   }>;
   byCampaign: Array<{
+    campaignId?: string;
     campaignName: string;
     totalLeads: number;
     sent: number;
@@ -289,8 +290,11 @@ export default function InsightsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.byCampaign.map((row) => (
-                  <tr key={row.campaignName} className="border-b border-border/60 hover:bg-muted/20">
+                {data.byCampaign.map((row, index) => (
+                  <tr
+                    key={row.campaignId || `${row.campaignName}-${index}`}
+                    className="border-b border-border/60 hover:bg-muted/20"
+                  >
                     <td className="px-6 py-3 text-sm text-foreground">{row.campaignName}</td>
                     <td className="px-6 py-3 text-sm text-muted-foreground">{row.totalLeads}</td>
                     <td className="px-6 py-3 text-sm text-muted-foreground">{row.sent}</td>
