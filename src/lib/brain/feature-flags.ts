@@ -1,19 +1,25 @@
-const hasOpenRouterKey = Boolean(process.env.OPENROUTER_API_KEY?.trim());
+function hasOpenRouterKey() {
+  return Boolean(process.env.OPENROUTER_API_KEY?.trim());
+}
 
-const bmBrain = process.env.BM_GTM_BRAIN_EXPERIMENTS?.trim().toLowerCase();
+function isBrainForceDisabled() {
+  const bmBrain = process.env.BM_GTM_BRAIN_EXPERIMENTS?.trim().toLowerCase();
+  return bmBrain === "0" || bmBrain === "false";
+}
 
 /**
- * Runs Brain Lab experiment flows when OpenRouter + Claude access is configured
- * (see OPENROUTER_API_KEY). Set BM_GTM_BRAIN_EXPERIMENTS=0 to force-disable.
+ * Runtime check (not module-level constant) so env changes are reflected
+ * without stale flags lingering in long-lived dev sessions.
  */
-export const BRAIN_EXPERIMENTS_ENABLED =
-  hasOpenRouterKey && bmBrain !== "0" && bmBrain !== "false";
+export function isBrainExperimentsEnabled() {
+  return hasOpenRouterKey() && !isBrainForceDisabled();
+}
 
 export function brainExperimentsDisabledMessage() {
-  if (!hasOpenRouterKey) {
-    return "Brain Lab needs OPENROUTER_API_KEY (OpenRouter bearer key). Optionally set OPENROUTER_MODEL (default: ~anthropic/claude-haiku-latest).";
+  if (!hasOpenRouterKey()) {
+    return "Brain Lab needs OPENROUTER_API_KEY (OpenRouter bearer key). Model is hard-locked to anthropic/claude-haiku-4.5.";
   }
-  if (!BRAIN_EXPERIMENTS_ENABLED) {
+  if (isBrainForceDisabled()) {
     return "Brain experiments are disabled (BM_GTM_BRAIN_EXPERIMENTS=0). Remove that or unset it to enable.";
   }
   return "";

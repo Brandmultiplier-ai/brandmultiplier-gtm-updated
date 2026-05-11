@@ -19,6 +19,9 @@ import {
   Loader2,
   Save,
   X,
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore, type WorkspaceSummary } from "@/stores/app-store";
@@ -251,11 +254,6 @@ function SettingsPageContent() {
   const initialTab = isTabId(searchParams.get("tab")) ? (searchParams.get("tab") as TabId) : "templates";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
-  useEffect(() => {
-    const next = searchParams.get("tab");
-    if (isTabId(next)) setActiveTab(next as TabId);
-  }, [searchParams]);
-
   return (
     <div className="mx-auto w-full max-w-screen-2xl space-y-6">
       {/* Header */}
@@ -289,6 +287,132 @@ function SettingsPageContent() {
       {activeTab === "company" && <CompanyProfileTab />}
       {activeTab === "account" && <AccountProfileTab />}
       {activeTab === "linkedin" && <LinkedInAccountsTab />}
+    </div>
+  );
+}
+
+type ReadinessPayload = {
+  ok: boolean;
+  checks: {
+    openRouterApiKey: boolean;
+    unipileApiKey: boolean;
+    unipileBaseUrl: boolean;
+    unipileAccountId: boolean;
+    webhookSecret: boolean;
+    cronSecret: boolean;
+    seatsConfigured: boolean;
+    connectedSeats: number;
+    providerConnections: number;
+  };
+  readiness: {
+    openRouterReady: boolean;
+    unipileReady: boolean;
+    automationReady: boolean;
+    seatReady: boolean;
+  };
+  nextSteps: string[];
+};
+
+function ReadinessItem({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.12em]",
+        ok ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
+      )}>
+        {ok ? <CheckCircle2 className="size-3" /> : <AlertTriangle className="size-3" />}
+        {ok ? "Ready" : "Missing"}
+      </span>
+    </div>
+  );
+}
+
+function IntegrationReadinessCard() {
+  const [payload, setPayload] = useState<ReadinessPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadReadiness() {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/integrations/readiness");
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || "Failed to load integration checks");
+      }
+      setPayload(body as ReadinessPayload);
+    } catch (readinessError) {
+      setError(readinessError instanceof Error ? readinessError.message : "Failed to load integration checks");
+      setPayload(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadReadiness();
+  }, []);
+
+  return (
+    <div className="clean-card p-6 space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-medium text-foreground">Integration Readiness</h3>
+          <p className="text-[11px] text-stone mt-1">
+            Quick status for OpenRouter + Unipile + automation secrets.
+          </p>
+        </div>
+        <button
+          onClick={() => { void loadReadiness(); }}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 disabled:opacity-50"
+        >
+          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          Refresh
+        </button>
+      </div>
+
+      {error ? (
+        <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </div>
+      ) : null}
+
+      {payload ? (
+        <>
+          <div className="grid gap-2 md:grid-cols-2">
+            <ReadinessItem label="OpenRouter API key" ok={payload.checks.openRouterApiKey} />
+            <ReadinessItem label="Unipile API key" ok={payload.checks.unipileApiKey} />
+            <ReadinessItem label="Unipile base URL" ok={payload.checks.unipileBaseUrl} />
+            <ReadinessItem label="Unipile account ID" ok={payload.checks.unipileAccountId} />
+            <ReadinessItem label="Webhook secret" ok={payload.checks.webhookSecret} />
+            <ReadinessItem label="Cron secret" ok={payload.checks.cronSecret} />
+            <ReadinessItem label="LinkedIn seats connected" ok={payload.checks.connectedSeats > 0} />
+            <ReadinessItem label="Provider connection record" ok={payload.checks.providerConnections > 0} />
+          </div>
+          {payload.nextSteps.length > 0 ? (
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-3">
+              <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">Next actions</p>
+              <ul className="mt-2 space-y-1 text-xs text-foreground">
+                {payload.nextSteps.map((step) => (
+                  <li key={step}>- {step}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-success/20 bg-success/10 px-3 py-2 text-xs text-success">
+              All integration checks look good.
+            </div>
+          )}
+        </>
+      ) : loading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Running checks...
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -374,6 +498,7 @@ function LinkedInAccountsTab() {
 
   return (
     <div className="space-y-6">
+      <IntegrationReadinessCard />
       <div className="clean-card overflow-hidden">
         <div className="px-6 py-5 border-b border-border">
           <div className="flex items-center gap-3">

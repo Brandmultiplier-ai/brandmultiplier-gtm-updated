@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAppWorkspaceRead } from "@/lib/auth/resolve-app-workspace";
-import { BRAIN_EXPERIMENTS_ENABLED, brainExperimentsDisabledMessage } from "@/lib/brain/feature-flags";
+import { brainExperimentsDisabledMessage, isBrainExperimentsEnabled } from "@/lib/brain/feature-flags";
 import { getExperiment } from "@/lib/brain/experiment-store";
 import { approveExperiment, cancelExperiment, runEvaluation, keepExperiment, discardExperiment } from "@/lib/brain/experiment-lifecycle";
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!BRAIN_EXPERIMENTS_ENABLED) {
+  if (!isBrainExperimentsEnabled()) {
     return NextResponse.json({ error: brainExperimentsDisabledMessage() }, { status: 409 });
   }
 

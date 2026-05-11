@@ -355,6 +355,7 @@ function formatTimeAgo(isoDate: string): string {
 export default function CopilotPage() {
   const [data, setData] = useState<CopilotData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"autopilot" | "review">("review");
   const [editedMessages, setEditedMessages] = useState<Record<string, Record<number, string>>>({});
@@ -364,15 +365,28 @@ export default function CopilotPage() {
   const [modeSaving, setModeSaving] = useState(false);
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
 
+  async function loadCopilotData() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await fetch("/api/copilot");
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || "Failed to load copilot queue");
+      }
+      setData(body as CopilotData);
+      setMode((body as CopilotData).mode);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load copilot queue";
+      setLoadError(message);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    fetch("/api/copilot")
-      .then((r) => r.json())
-      .then((d: CopilotData) => {
-        setData(d);
-        setMode(d.mode);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    void loadCopilotData();
   }, []);
 
   const actionQueue = data?.actionQueue || [];
@@ -415,6 +429,27 @@ export default function CopilotPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="clean-card max-w-md p-6 text-center">
+          <p className="text-sm font-medium text-foreground">Copilot queue unavailable</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {loadError || "Something went wrong while loading campaign actions."}
+          </p>
+          <button
+            onClick={() => {
+              void loadCopilotData();
+            }}
+            className="mt-4 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/30"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -593,6 +628,14 @@ export default function CopilotPage() {
 
           {/* Mode toggle */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                void loadCopilotData();
+              }}
+              className="rounded-lg border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/30"
+            >
+              Refresh
+            </button>
             <div className="flex rounded-lg overflow-hidden border border-border">
               <button
                 onClick={() => handleModeChange("autopilot")}
@@ -617,7 +660,11 @@ export default function CopilotPage() {
             </div>
           </div>
         </div>
-
+        {loadError && (
+          <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {loadError}
+          </div>
+        )}
       </div>
 
       {/* Content */}

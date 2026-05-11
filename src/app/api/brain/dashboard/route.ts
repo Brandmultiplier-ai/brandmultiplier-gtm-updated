@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAppWorkspaceRead } from "@/lib/auth/resolve-app-workspace";
 import { getLatestSnapshot } from "@/lib/brain";
-import { BRAIN_EXPERIMENTS_ENABLED, brainExperimentsDisabledMessage } from "@/lib/brain/feature-flags";
+import { brainExperimentsDisabledMessage, isBrainExperimentsEnabled } from "@/lib/brain/feature-flags";
 import { listExperiments, getActiveExperiment } from "@/lib/brain/experiment-store";
 import { listExperimentExposures } from "@/lib/brain/exposure-store";
 import { getExperimentSampleCounts } from "@/lib/brain/evaluator";
@@ -9,6 +9,7 @@ import { getExperimentProposalEligibility } from "@/lib/brain/experiment-policy"
 import * as store from "@/lib/store";
 
 export async function GET(req: NextRequest) {
+  const brainEnabled = isBrainExperimentsEnabled();
   const $wsa = await requireAppWorkspaceRead(req);
 
   if (!$wsa.ok) return $wsa.response;
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
   }));
 
   // Active experiment
-  const activeExp = BRAIN_EXPERIMENTS_ENABLED ? await getActiveExperiment(workspaceId) : null;
+  const activeExp = brainEnabled ? await getActiveExperiment(workspaceId) : null;
   let activeSample = null;
   let activeExposures: { control: number; challenger: number } | null = null;
   if (activeExp && activeExp.status === "running") {
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    automationEnabled: BRAIN_EXPERIMENTS_ENABLED,
+    automationEnabled: brainEnabled,
     automationMessage: brainExperimentsDisabledMessage(),
     campaigns: warmupByCampaign,
     activeExperiment: activeExp

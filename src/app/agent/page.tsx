@@ -13,6 +13,8 @@ import {
   X,
   Check,
   Bot,
+  Sparkles,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,7 @@ interface AgentConfig {
     personalProfile: string;
     trackProfileVisitors: boolean;
     trackCompanyFollowers: boolean;
+    selectedTopics?: string[];
     engagementKeywords: string[];
     watchProfiles: string[];
     neverTargetProfiles: string[];
@@ -54,6 +57,31 @@ interface AgentConfig {
     autoAddToList: boolean;
     listName: string;
   };
+}
+
+function buildStarterKeywordsFromIcp(agent: AgentConfig): string[] {
+  const unique = new Set<string>();
+  const add = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    unique.add(trimmed);
+  };
+
+  const titles = agent.icp.jobTitles || [];
+  const industries = agent.icp.industries || [];
+  for (const title of titles) add(title);
+  for (const industry of industries) {
+    add(industry);
+    add(`${industry} growth`);
+  }
+
+  for (const title of titles.slice(0, 3)) {
+    for (const industry of industries.slice(0, 2)) {
+      add(`${title} ${industry}`);
+    }
+  }
+
+  return Array.from(unique).slice(0, 8);
 }
 
 function countSignals(agent: AgentConfig): number {
@@ -372,6 +400,9 @@ function StepSignals({
   setConfig: (c: AgentConfig) => void;
 }) {
   const sig = config.signals;
+  const selectedTopics = Array.isArray(sig.selectedTopics) ? sig.selectedTopics : [];
+  const effectiveTopics = selectedTopics.length > 0 ? selectedTopics : sig.engagementKeywords;
+  const starterKeywords = buildStarterKeywordsFromIcp(config);
   const set = (patch: Partial<AgentConfig["signals"]>) =>
     setConfig({ ...config, signals: { ...sig, ...patch } });
   const appendUnique = (items: string[], value: string) =>
@@ -390,6 +421,32 @@ function StepSignals({
           What signals indicate buying intent
         </p>
       </div>
+      {effectiveTopics.length === 0 ? (
+        <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
+          <p className="text-sm font-medium text-foreground">Guardrail: no discovery topics configured.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Add engagement keywords (or selected topics) so discovery can find matching profiles.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 border-warning/40 text-warning hover:bg-warning/20"
+              onClick={() =>
+                set({
+                  engagementKeywords: Array.from(
+                    new Set([...(sig.engagementKeywords || []), ...starterKeywords])
+                  ),
+                })
+              }
+              disabled={starterKeywords.length === 0}
+            >
+              Use ICP starter keywords ({starterKeywords.length})
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
         <SignalSection
@@ -789,7 +846,9 @@ export default function AgentPage() {
   const [editing, setEditing] = useState<AgentConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAgentId, setSavingAgentId] = useState<string | null>(null);
+  const [runningDiscoveryAgentId, setRunningDiscoveryAgentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   function newAgentDraft(): AgentConfig {
     return {
@@ -885,6 +944,60 @@ export default function AgentPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function runDiscovery(agentId?: string) {
+    const key = agentId || "workspace";
+    setRunningDiscoveryAgentId(key);
+    setError(null);
+    setInfo(null);
+    try {
+      const response = await fetch("/api/discovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(agentId ? { agentId } : {}),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || "Discovery run failed");
+      }
+      const discovered = typeof body.discovered === "number" ? body.discovered : 0;
+      const saved = typeof body.saved === "number" ? body.saved : 0;
+      const duplicates = typeof body.duplicates === "number" ? body.duplicates : 0;
+      setInfo(`Discovery finished: ${discovered} discovered, ${saved} saved, ${duplicates} duplicates.`);
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Discovery run failed");
+    } finally {
+      setRunningDiscoveryAgentId(null);
+    }
+  }
+
+  async function deleteAgent(agent: AgentConfig) {
+    const label = agent.name || "this agent";
+    const ok = window.confirm(`Delete ${label}? This cannot be undone.`);
+    if (!ok) return;
+
+    const agentKey = agent.id || agent.name;
+    setSavingAgentId(agentKey);
+    setError(null);
+    setInfo(null);
+    try {
+      const response = await fetch("/api/agent", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: agent.id }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || "Failed to delete agent");
+      }
+      setAgents((prev) => prev.filter((row) => (row.id || row.name) !== agentKey));
+      setInfo(`Deleted agent: ${label}`);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete agent");
+    } finally {
+      setSavingAgentId(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -952,10 +1065,15 @@ export default function AgentPage() {
           {error}
         </div>
       ) : null}
+      {info ? (
+        <div className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
+          {info}
+        </div>
+      ) : null}
 
       {/* Agent table */}
       <div className="clean-card overflow-hidden">
-        <div className="grid grid-cols-[minmax(0,1fr)_8rem_18rem] items-center gap-6 px-6 py-4 font-ui text-[10px] font-medium tracking-[0.2em] text-stone uppercase border-b border-border">
+        <div className="grid grid-cols-[minmax(0,1fr)_10rem_24rem] items-center gap-6 px-6 py-4 font-ui text-[10px] font-medium tracking-[0.2em] text-stone uppercase border-b border-border">
           <span>Agent Identity</span>
           <span className="text-center">Engine Signals</span>
           <span className="text-right">Control Deck</span>
@@ -984,7 +1102,7 @@ export default function AgentPage() {
             return (
             <div
               key={agentKey}
-              className="grid grid-cols-[minmax(0,1fr)_8rem_18rem] items-center gap-6 px-6 py-6 transition-all duration-200 hover:bg-muted/20 group"
+              className="grid grid-cols-[minmax(0,1fr)_10rem_24rem] items-center gap-6 px-6 py-6 transition-all duration-200 hover:bg-muted/20 group"
             >
               <div className="flex items-center gap-4">
                 <div className="relative">
@@ -1020,7 +1138,17 @@ export default function AgentPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 flex-nowrap shrink-0">
+              <div className="flex items-center justify-end gap-2 flex-wrap shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-border text-muted-foreground text-[10px] uppercase tracking-[0.15em] h-9 px-4 rounded-lg hover:bg-muted/40"
+                  disabled={runningDiscoveryAgentId === agentKey}
+                  onClick={() => { void runDiscovery(agent.id); }}
+                >
+                  {runningDiscoveryAgentId === agentKey ? <Loader2 className="size-3.5 mr-2 animate-spin" /> : <Sparkles className="size-3.5 mr-2" />}
+                  {runningDiscoveryAgentId === agentKey ? "Running..." : "Run discovery"}
+                </Button>
                 <Button
                   variant={agent.status === "active" ? "outline" : "default"}
                   size="sm"
@@ -1043,6 +1171,16 @@ export default function AgentPage() {
                 >
                   <Pencil className="size-3.5 mr-2" />
                   Configure
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive/30 text-destructive text-[10px] uppercase tracking-[0.15em] h-9 px-4 rounded-lg hover:bg-destructive/10"
+                  disabled={isSavingStatus || !agent.id}
+                  onClick={() => { void deleteAgent(agent); }}
+                >
+                  <Trash2 className="size-3.5 mr-2" />
+                  Delete
                 </Button>
               </div>
             </div>

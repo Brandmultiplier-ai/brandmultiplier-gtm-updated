@@ -35,11 +35,15 @@ interface InsightsData {
   period: { start: string; end: string };
   kpis: {
     totalLeads: number;
+    totalSignals: number;
+    promotedSignals: number;
+    highIntentSignals: number;
     avgLeadsPerDay: number;
     activeSignals: number;
     totalInvited: number;
     totalAccepted: number;
     totalReplied: number;
+    totalConversations: number;
     connectRate: number;
     replyRate: number;
   };
@@ -130,11 +134,12 @@ export default function InsightsPage() {
       return;
     }
 
-    setLoading(true);
-    setError(null);
     fetch(`/api/insights?start=${startDate}&end=${endDate}`)
       .then((r) => r.json())
-      .then((d: InsightsData) => setData(d))
+      .then((d: InsightsData) => {
+        setError(null);
+        setData(d);
+      })
       .catch(() => setError("Failed to load insights"))
       .finally(() => setLoading(false));
   }, [startDate, endDate]);
@@ -148,8 +153,9 @@ export default function InsightsPage() {
   }
 
   const kpis = data?.kpis || {
-    totalLeads: 0, avgLeadsPerDay: 0, activeSignals: 0,
-    totalInvited: 0, totalAccepted: 0, totalReplied: 0,
+    totalLeads: 0, totalSignals: 0, promotedSignals: 0, highIntentSignals: 0,
+    avgLeadsPerDay: 0, activeSignals: 0,
+    totalInvited: 0, totalAccepted: 0, totalReplied: 0, totalConversations: 0,
     connectRate: 0, replyRate: 0,
   };
 
@@ -195,22 +201,26 @@ export default function InsightsPage() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-5">
-        <KpiCard label="Total Leads" value={kpis.totalLeads} subtitle="in the selected period" icon={Users} />
-        <KpiCard label="Avg Leads/Day" value={kpis.avgLeadsPerDay} subtitle="daily average" icon={TrendingUp} />
-        <KpiCard label="Active Signals" value={kpis.activeSignals} subtitle="generating leads" icon={Zap} />
-        <KpiCard label="Contacted" value={kpis.totalInvited} subtitle={`${kpis.connectRate}% connect rate`} icon={Target} />
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3 xl:grid-cols-6">
+        <KpiCard label="Signal Pool" value={kpis.totalSignals} subtitle={`${kpis.highIntentSignals} high-intent signals`} icon={Zap} />
+        <KpiCard label="Campaign Leads" value={kpis.totalLeads} subtitle={`${kpis.promotedSignals} promoted signals`} icon={Users} />
+        <KpiCard label="Requests Sent" value={kpis.totalInvited} subtitle="connection requests" icon={Target} />
+        <KpiCard label="Connected" value={kpis.totalAccepted} subtitle={`${kpis.connectRate}% connect rate`} icon={TrendingUp} />
+        <KpiCard label="Replies" value={kpis.totalReplied} subtitle={`${kpis.replyRate}% reply rate`} icon={BarChart3} />
+        <KpiCard label="Conversations" value={kpis.totalConversations} subtitle="replied or marked interested" icon={Users} />
       </div>
 
       {/* Funnel overview */}
       <div className="clean-card p-6">
-        <h3 className="text-[10px] font-medium uppercase tracking-[0.2em] text-stone mb-5">Conversion Funnel</h3>
-        <div className="grid grid-cols-5 gap-4">
+        <h3 className="text-[10px] font-medium uppercase tracking-[0.2em] text-stone mb-5">Discovery to conversation funnel</h3>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
           {[
-            { label: "Discovered", value: kpis.totalLeads, color: "bg-coral/20 text-violet-300" },
-            { label: "Invited", value: kpis.totalInvited, color: "bg-coral/20 text-coral" },
-            { label: "Accepted", value: kpis.totalAccepted, color: "bg-success/20 text-emerald-300" },
-            { label: "Replied", value: kpis.totalReplied, color: "bg-brand/20 text-pink-300" },
+            { label: "Signal pool", value: kpis.totalSignals, color: "bg-coral/20 text-violet-300" },
+            { label: "Campaign leads", value: kpis.totalLeads, color: "bg-muted/40 text-foreground" },
+            { label: "Requests sent", value: kpis.totalInvited, color: "bg-coral/20 text-coral" },
+            { label: "Connected", value: kpis.totalAccepted, color: "bg-success/20 text-emerald-300" },
+            { label: "Replies", value: kpis.totalReplied, color: "bg-brand/20 text-pink-300" },
+            { label: "Conversations", value: kpis.totalConversations, color: "bg-warning/20 text-warning" },
           ].map((item, i, arr) => (
             <div key={item.label} className="text-center">
               <div className={cn("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium", item.color)}>

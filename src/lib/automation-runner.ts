@@ -1,6 +1,6 @@
 import { analyzeWorkspace } from "./brain";
 import { runLifecycle } from "./brain/experiment-lifecycle";
-import { BRAIN_EXPERIMENTS_ENABLED } from "./brain/feature-flags";
+import { isBrainExperimentsEnabled } from "./brain/feature-flags";
 import { syncInbox } from "./inbox-sync";
 import { runOutreach } from "./outreach-engine";
 import { runSequence } from "./sequence-runner";
@@ -71,6 +71,7 @@ export async function runAutomationTick(opts: AutomationTickOptions): Promise<Au
 
   const log = onLog || (() => {});
   const startedAt = new Date().toISOString();
+  const brainExperimentsEnabled = isBrainExperimentsEnabled();
   const errors: string[] = [];
   const campaignResults: AutomationCampaignResult[] = [];
   const workspaceResults: AutomationWorkspaceResult[] = [];
@@ -185,10 +186,10 @@ export async function runAutomationTick(opts: AutomationTickOptions): Promise<Au
       log("");
 
       log(`--- Phase 4: Experiment Lifecycle (${currentWorkspaceId}) ---`);
-      const lifecycleEvents = BRAIN_EXPERIMENTS_ENABLED
+      const lifecycleEvents = brainExperimentsEnabled
         ? await runLifecycle(currentWorkspaceId, snapshot)
         : [];
-      if (!BRAIN_EXPERIMENTS_ENABLED) {
+      if (!brainExperimentsEnabled) {
         log("  Brain experiments paused");
       } else if (lifecycleEvents.length === 0) {
         log("  No experiment activity");

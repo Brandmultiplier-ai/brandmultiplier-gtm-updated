@@ -453,6 +453,9 @@ function TemplateEvolutionCard({ experiments }: { experiments: Experiment[] }) {
 export default function BrainPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionInfo, setActionInfo] = useState<string | null>(null);
 
   async function loadData() {
     try {
@@ -471,6 +474,61 @@ export default function BrainPage() {
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  async function runSnapshot() {
+    setBusyAction("snapshot");
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      const response = await fetch("/api/brain", { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Failed to refresh snapshot");
+      setActionInfo("Snapshot refreshed.");
+      await loadData();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to refresh snapshot");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function proposeExperiment() {
+    setBusyAction("propose");
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      const response = await fetch("/api/brain/experiments", { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Failed to propose experiment");
+      setActionInfo("Experiment proposed.");
+      await loadData();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to propose experiment");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function updateExperiment(id: string, action: "approve" | "cancel" | "evaluate" | "keep" | "discard") {
+    setBusyAction(action);
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      const response = await fetch(`/api/brain/experiments/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `Failed to ${action} experiment`);
+      setActionInfo(`Experiment ${action} action completed.`);
+      await loadData();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : `Failed to ${action} experiment`);
+    } finally {
+      setBusyAction(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -504,11 +562,58 @@ export default function BrainPage() {
         </div>
         <button
           onClick={loadData}
+          disabled={busyAction !== null}
           className="text-[10px] uppercase tracking-[0.2em] text-stone hover:text-terracotta transition-colors"
         >
-          Refresh
+          {busyAction === null ? "Refresh" : "Working..."}
         </button>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => { void runSnapshot(); }}
+          disabled={busyAction !== null}
+          className="rounded-lg border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/30 disabled:opacity-50"
+        >
+          {busyAction === "snapshot" ? "Refreshing snapshot..." : "Refresh snapshot"}
+        </button>
+        <button
+          onClick={() => { void proposeExperiment(); }}
+          disabled={busyAction !== null || !automationEnabled || Boolean(data.activeExperiment)}
+          className="rounded-lg border border-brand/30 bg-brand/10 px-3 py-1.5 text-[11px] text-foreground hover:bg-brand/20 disabled:opacity-50"
+        >
+          {busyAction === "propose" ? "Proposing..." : "Propose experiment"}
+        </button>
+        {data.activeExperiment?.status === "proposed" && (
+          <button
+            onClick={() => { void updateExperiment(data.activeExperiment!.id, "approve"); }}
+            disabled={busyAction !== null}
+            className="rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-[11px] text-success hover:bg-success/20 disabled:opacity-50"
+          >
+            {busyAction === "approve" ? "Approving..." : "Approve active"}
+          </button>
+        )}
+        {data.activeExperiment && (
+          <button
+            onClick={() => { void updateExperiment(data.activeExperiment!.id, "cancel"); }}
+            disabled={busyAction !== null}
+            className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive hover:bg-destructive/20 disabled:opacity-50"
+          >
+            {busyAction === "cancel" ? "Cancelling..." : "Cancel active"}
+          </button>
+        )}
+      </div>
+
+      {actionError && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+      {actionInfo && (
+        <div className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
+          {actionInfo}
+        </div>
+      )}
 
       {!automationEnabled && (
         <div className="clean-card p-5 border-amber-500/20 bg-warning/[0.04]">

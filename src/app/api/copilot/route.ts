@@ -45,7 +45,6 @@ function parseSignal(lead: Lead) {
   let signalSource = "keyword_search";
   let signalText = "";
   let signalSourceUrl = "";
-  let signalSourceUrlType: SignalSourceUrlType | undefined;
   let signalKind = "";
   let topicKey = "";
   let topicLabel = "";
@@ -78,7 +77,7 @@ function parseSignal(lead: Lead) {
     sourcePostId: sourcePostId || undefined,
   });
   signalSourceUrl = normalized.sourceUrl || "";
-  signalSourceUrlType = normalized.sourceUrlType || undefined;
+  const signalSourceUrlType: SignalSourceUrlType | undefined = normalized.sourceUrlType || undefined;
 
   return {
     signalSource,
@@ -199,7 +198,10 @@ function computeInviteAction(
   let blockerReason: string | null = null;
   let scheduledFor: string | null = null;
 
-  if (!leadMatchesCampaignMarket(lead, campaign)) {
+  if (campaign.status !== "active") {
+    state = "blocked";
+    blockerReason = `Campaign is ${campaign.status}`;
+  } else if (!leadMatchesCampaignMarket(lead, campaign)) {
     state = "blocked";
     blockerReason = marketMismatchReason(lead.location, campaign);
   } else if (!languagesMatchCampaign(resolveLeadOutreachLanguage(lead), campaign.search.language)) {
@@ -287,7 +289,10 @@ function computeSequenceAction(
   let state: CopilotActionState = "ready";
   let blockerReason: string | null = null;
 
-  if (hasManualOverride(lead)) {
+  if (campaign.status !== "active") {
+    state = "blocked";
+    blockerReason = `Campaign is ${campaign.status}`;
+  } else if (hasManualOverride(lead)) {
     state = "blocked";
     blockerReason = "Sequence stopped after manual outbound message";
   } else if (lead.status === "replied" || lead.status === "interested") {
@@ -364,7 +369,10 @@ function buildSequence(lead: Lead, campaign: Campaign, seat: Awaited<ReturnType<
     let blockerReason: string | null = null;
 
     if (!executedEvent) {
-      if (step.step === 1) {
+      if (campaign.status !== "active") {
+        state = "blocked";
+        blockerReason = `Campaign is ${campaign.status}`;
+      } else if (step.step === 1) {
         if (campaign.settings?.reviewMode && !lead.approved) {
           state = "review";
           blockerReason = "Awaiting approval in review mode";
@@ -463,7 +471,8 @@ export async function GET(req: NextRequest) {
     const workspaceId = $wsa.value.workspaceId;
     const campaigns = await listCampaigns({ workspaceId });
     const managedCampaigns = campaigns.filter((campaign: Campaign) => campaign.status !== "completed");
-    const activeCampaigns = managedCampaigns.filter((campaign: Campaign) => campaign.status === "active");
+    // Keep promoted leads visible in Copilot even when campaign is draft/paused.
+    const activeCampaigns = managedCampaigns;
     const mode = managedCampaigns.some((campaign) => campaign.settings?.reviewMode)
       ? "review"
       : "autopilot";
@@ -662,22 +671,13 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("Copilot API error:", error);
-    return NextResponse.json({
-      mode: "review",
-      nextLaunchIn: "unknown",
-      summary: {
-        activeCampaigns: 0,
-        reviewCampaigns: 0,
-        autopilotCampaigns: 0,
-        reviewQueueCount: 0,
-        actionQueueCount: 0,
-        readyActions: 0,
-        scheduledActions: 0,
-        blockedActions: 0,
+    return NextResponse.json(
+      {
+        error: "Failed to load copilot queue",
+        detail: error instanceof Error ? error.message : String(error),
       },
-      leads: [],
-      actionQueue: [],
-    });
+      { status: 500 },
+    );
   }
 }
 

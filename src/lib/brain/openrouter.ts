@@ -1,7 +1,10 @@
 /** OpenAI-compatible Chat Completions at api.openrouter.ai (same schema as OpenAI). */
 
-/** OpenRouter has no `anthropic/claude-haiku-4.6` slug yet; this alias tracks the newest Haiku family model. */
-export const OPENROUTER_DEFAULT_MODEL = "~anthropic/claude-haiku-latest";
+/**
+ * Brain Lab is intentionally pinned to a single model so experiment behavior remains stable
+ * across environments.
+ */
+export const OPENROUTER_DEFAULT_MODEL = "anthropic/claude-haiku-4.5";
 
 type ChatCompletionResponse = {
   choices?: Array<{ message?: { content?: string | null } }>;
@@ -21,7 +24,6 @@ function completionsUrl(): string {
 export async function openRouterComplete(params: {
   system: string;
   user: string;
-  /** Override env OPENROUTER_MODEL */
   model?: string;
   maxTokens?: number;
 }): Promise<string> {
@@ -30,9 +32,8 @@ export async function openRouterComplete(params: {
     throw new Error("OPENROUTER_API_KEY is not set");
   }
 
-  const model = params.model?.trim()
-    || process.env.OPENROUTER_MODEL?.trim()
-    || OPENROUTER_DEFAULT_MODEL;
+  // Hard lock model selection for deterministic Brain behavior.
+  const model = OPENROUTER_DEFAULT_MODEL;
 
   const referer = process.env.OPENROUTER_HTTP_REFERRER?.trim()
     || process.env.BM_GTM_APP_URL?.trim()

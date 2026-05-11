@@ -86,3 +86,24 @@ export async function POST(req: NextRequest) {
   const saved = await store.saveAgent(agent);
   return NextResponse.json({ ok: true, agent: saved });
 }
+
+export async function DELETE(req: NextRequest) {
+  const $wsa = await requireAppWorkspaceRead(req);
+
+  if (!$wsa.ok) return $wsa.response;
+
+  const workspaceId = $wsa.value.workspaceId;
+  const body = await req.json().catch(() => ({})) as { id?: string };
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  if (!id) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  const agent = await store.getAgent(id, workspaceId);
+  if (!agent) {
+    return NextResponse.json({ error: "Agent not found in workspace" }, { status: 404 });
+  }
+
+  await store.deleteAgent(id);
+  return NextResponse.json({ ok: true });
+}

@@ -9,7 +9,7 @@ import { classifyInviteResponse, searchPeople, sendInvite, getProfile } from "./
 import * as store from "./store";
 import type { Agent, BrainExperiment, Campaign, CampaignExecutionState, Lead } from "./types";
 import { selectTemplate } from "./brain/template-selector";
-import { BRAIN_EXPERIMENTS_ENABLED } from "./brain/feature-flags";
+import { isBrainExperimentsEnabled } from "./brain/feature-flags";
 import { getActiveExperiment, updateExperiment } from "./brain/experiment-store";
 import { hashTemplate } from "./brain/template-utils";
 import {
@@ -526,6 +526,7 @@ export async function runOutreach(opts: RunOptions): Promise<RunResult> {
     onEvent,
   } = opts;
   const events: OutreachEvent[] = [];
+  const brainExperimentsEnabled = isBrainExperimentsEnabled();
 
   function emit(event: OutreachEvent) {
     events.push(event);
@@ -564,7 +565,7 @@ export async function runOutreach(opts: RunOptions): Promise<RunResult> {
   // Check weekly limit before starting
   // Check for active Brain v1 experiment
   let activeExp: BrainExperiment | null = null;
-  if (BRAIN_EXPERIMENTS_ENABLED) {
+  if (brainExperimentsEnabled) {
     try {
       activeExp = await getActiveExperiment(campaign.workspaceId);
       if (activeExp && activeExp.campaignId !== campaignId) activeExp = null; // different campaign

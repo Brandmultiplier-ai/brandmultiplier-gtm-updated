@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as store from "@/lib/store";
-import type { Agent, Campaign, Lead, LeadEvent } from "@/lib/types";
+import type { Agent, Campaign, Lead, LeadEvent, SignalCandidate } from "@/lib/types";
 import { requireAppWorkspaceRead } from "@/lib/auth/resolve-app-workspace";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +40,10 @@ function hasEvent(lead: Lead, type: LeadEvent["type"], start: Date, end: Date) {
   return lead.events.some((event) => event.type === type && isInRange(event.ts, start, end));
 }
 
+function signalInRange(signal: SignalCandidate, start: Date, end: Date) {
+  return isInRange(signal.createdAt, start, end);
+}
+
 function dateKeys(start: Date, end: Date): string[] {
   const keys: string[] = [];
   const cursor = new Date(start);
@@ -69,27 +73,42 @@ export async function GET(req: NextRequest) {
     if (!$wsa.ok) return $wsa.response;
 
     const workspaceId = $wsa.value.workspaceId;
-    const [campaigns, agents, allLeads] = await Promise.all([
+    const [campaigns, agents, allLeads, signalCandidates] = await Promise.all([
       store.listCampaigns({ workspaceId }),
       store.listAgents(workspaceId),
       store.getAllLeads({ workspaceId }),
+      store.listSignalCandidates({ workspaceId, limit: 5000 }),
     ]);
     const { start, end } = parseRange(req);
     const periodDays = Math.max(1, Math.ceil((end.getTime() - start.getTime() + 1) / 86_400_000));
 
     const leadsCreated = allLeads.filter((lead) => isInRange(lead.createdAt, start, end));
+    const signalsDiscovered = signalCandidates.filter((signal) => signalInRange(signal, start, end));
+    const signalsPromoted = signalCandidates.filter((signal) => signal.status === "promoted" && isInRange(signal.updatedAt, start, end));
+    const highIntentSignals = signalCandidates.filter((signal) => signal.intentScore >= 4 && signalInRange(signal, start, end));
     const invitedLeads = allLeads.filter((lead) => hasEvent(lead, "invite_sent", start, end));
     const acceptedLeads = allLeads.filter((lead) => hasEvent(lead, "accepted", start, end));
     const repliedLeads = allLeads.filter((lead) => hasEvent(lead, "replied", start, end));
+    const conversationLeads = allLeads.filter((lead) => (
+      ((lead.status === "replied" || lead.status === "interested") && isInRange(lead.updatedAt, start, end)) ||
+      hasEvent(lead, "replied", start, end)
+    ));
     const activeSignals = agents.filter((agent: Agent) => agent.status === "active").length;
 
     const dailyMap = Object.fromEntries(
       dateKeys(start, end).map((key) => [key, { discovered: 0, invited: 0, accepted: 0, replied: 0, messaged: 0 }])
     ) as Record<string, { discovered: number; invited: number; accepted: number; replied: number; messaged: number }>;
 
+    for (const signal of signalCandidates) {
+      const createdDay = signal.createdAt.slice(0, 10);
+      if (dailyMap[createdDay] && signalInRange(signal, start, end)) {
+        dailyMap[createdDay].discovered++;
+      }
+    }
+
     for (const lead of allLeads) {
       const createdDay = lead.createdAt.slice(0, 10);
-      if (dailyMap[createdDay] && isInRange(lead.createdAt, start, end)) {
+      if (signalsDiscovered.length === 0 && dailyMap[createdDay] && isInRange(lead.createdAt, start, end)) {
         dailyMap[createdDay].discovered++;
       }
 
@@ -167,11 +186,15 @@ export async function GET(req: NextRequest) {
       },
       kpis: {
         totalLeads: leadsCreated.length,
+        totalSignals: signalsDiscovered.length,
+        promotedSignals: signalsPromoted.length,
+        highIntentSignals: highIntentSignals.length,
         avgLeadsPerDay: Math.round(leadsCreated.length / periodDays),
         activeSignals,
         totalInvited: invitedLeads.length,
         totalAccepted: acceptedLeads.length,
         totalReplied: repliedLeads.length,
+        totalConversations: conversationLeads.length,
         connectRate: invitedLeads.length > 0 ? Math.round((acceptedLeads.length / invitedLeads.length) * 100) : 0,
         replyRate: acceptedLeads.length > 0 ? Math.round((repliedLeads.length / acceptedLeads.length) * 100) : 0,
       },
@@ -186,11 +209,15 @@ export async function GET(req: NextRequest) {
       period: { start: "", end: "" },
       kpis: {
         totalLeads: 0,
+        totalSignals: 0,
+        promotedSignals: 0,
+        highIntentSignals: 0,
         avgLeadsPerDay: 0,
         activeSignals: 0,
         totalInvited: 0,
         totalAccepted: 0,
         totalReplied: 0,
+        totalConversations: 0,
         connectRate: 0,
         replyRate: 0,
       },

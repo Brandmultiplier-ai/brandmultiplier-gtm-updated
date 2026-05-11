@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAppWorkspaceRead } from "@/lib/auth/resolve-app-workspace";
-import { BRAIN_EXPERIMENTS_ENABLED, brainExperimentsDisabledMessage } from "@/lib/brain/feature-flags";
+import { brainExperimentsDisabledMessage, isBrainExperimentsEnabled } from "@/lib/brain/feature-flags";
 import { listExperiments, saveExperiment, getActiveExperiment } from "@/lib/brain/experiment-store";
 import { getLatestSnapshot } from "@/lib/brain";
 import { generateHypothesis } from "@/lib/brain/hypothesis-generator";
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!BRAIN_EXPERIMENTS_ENABLED) {
+  if (!isBrainExperimentsEnabled()) {
     return NextResponse.json({ error: brainExperimentsDisabledMessage() }, { status: 409 });
   }
 
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No active campaign" }, { status: 400 });
   }
 
-  const agent = await store.getAgent(campaign.agentId);
+  const agent = await store.getAgent(campaign.agentId, workspaceId);
   if (!agent) {
     return NextResponse.json({ error: "Agent not found" }, { status: 400 });
   }

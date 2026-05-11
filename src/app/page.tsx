@@ -24,9 +24,13 @@ interface DashboardData {
   stats: {
     totalContacted: number;
     totalDiscovered: number;
+    totalCampaignLeads: number;
+    totalPromoted: number;
     totalSent: number;
     totalAccepted: number;
     totalReplied: number;
+    totalConversations: number;
+    highIntentSignals: number;
     totalPending: number;
     activeAgents: number;
     activeCampaigns: number;
@@ -414,18 +418,15 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<PeriodOption>("30d");
-  const [dealSize, setDealSize] = useState<number>(0);
+  const [dealSize, setDealSize] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const stored = window.localStorage.getItem(DEAL_SIZE_STORAGE_KEY);
+    if (!stored) return 0;
+    const parsed = Number(stored);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  });
   const [editingDealSize, setEditingDealSize] = useState(false);
   const [dealSizeDraft, setDealSizeDraft] = useState<string>("");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(DEAL_SIZE_STORAGE_KEY);
-    if (stored) {
-      const parsed = Number(stored);
-      if (Number.isFinite(parsed) && parsed >= 0) setDealSize(parsed);
-    }
-  }, []);
 
   function commitDealSize() {
     const next = Math.max(0, Math.floor(Number(dealSizeDraft) || 0));
@@ -437,7 +438,6 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/dashboard?period=${period}`)
       .then((r) => r.json())
       .then((dashboard) => setData(dashboard))
@@ -456,9 +456,13 @@ export default function DashboardPage() {
   const stats = data?.stats || {
     totalContacted: 0,
     totalDiscovered: 0,
+    totalCampaignLeads: 0,
+    totalPromoted: 0,
     totalSent: 0,
     totalAccepted: 0,
     totalReplied: 0,
+    totalConversations: 0,
+    highIntentSignals: 0,
     totalPending: 0,
     activeAgents: 0,
     activeCampaigns: 0,
@@ -554,7 +558,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Next Actions + KPI Row */}
-      <div className="grid grid-cols-5 gap-5">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-6">
         {/* Next Actions card */}
         {nextActions && (
           <div className="clean-card p-6 group">
@@ -597,10 +601,11 @@ export default function DashboardPage() {
 
         {/* KPI cards */}
         {[
-          { label: "Discovered", value: stats.totalDiscovered, icon: Target, detail: "Total pipeline" },
-          { label: "Contacted", value: stats.totalContacted, icon: Send, detail: `${stats.totalDiscovered > 0 ? Math.round((stats.totalContacted / stats.totalDiscovered) * 100) : 0}% of pipeline` },
-          { label: "Accepted", value: stats.totalAccepted, icon: Rocket, detail: `${stats.connectRate}% connect rate` },
-          { label: "Replied", value: stats.totalReplied, icon: MessageSquare, detail: `${stats.replyRate}% reply rate` },
+          { label: "Signal pool", value: stats.totalDiscovered, icon: Target, detail: `${stats.highIntentSignals} high-intent signals` },
+          { label: "Campaign leads", value: stats.totalCampaignLeads, icon: Rocket, detail: `${stats.totalPromoted} promoted from signals` },
+          { label: "Requests sent", value: stats.totalSent, icon: Send, detail: `${stats.totalCampaignLeads > 0 ? Math.round((stats.totalSent / stats.totalCampaignLeads) * 100) : 0}% of leads` },
+          { label: "Connected", value: stats.totalAccepted, icon: Linkedin, detail: `${stats.connectRate}% connect rate` },
+          { label: "Replies", value: stats.totalReplied, icon: MessageSquare, detail: `${stats.totalConversations} conversation lead${stats.totalConversations === 1 ? "" : "s"}` },
         ].map((item, i) => (
           <div key={i} className="clean-card p-6 group">
             <div className="flex flex-col gap-4">
@@ -623,12 +628,12 @@ export default function DashboardPage() {
 
       {/* Bottom row */}
       <div className="grid grid-cols-2 gap-6">
-        {/* Latest Hot Leads */}
+        {/* Latest Campaign Leads */}
         <div className="clean-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Flame className="size-4 text-stone" />
-              <h3 className="font-ui text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Latest High-Intent Leads</h3>
+              <h3 className="font-ui text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Latest Campaign Leads</h3>
             </div>
             <Link href="/leads">
               <Button variant="ghost" size="sm" className="font-ui hover:bg-muted/40 text-[10px] uppercase tracking-[0.18em] text-stone gap-1.5 h-7">
@@ -660,8 +665,8 @@ export default function DashboardPage() {
             ) : (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Claudio size={48} mood="thinking" />
-                <p className="text-base text-foreground">No hot leads yet</p>
-                <p className="font-ui text-xs text-stone">Claudio is still scouting</p>
+                <p className="text-base text-foreground">No campaign leads yet</p>
+                <p className="font-ui text-xs text-stone">Promoted signals and imports will show here</p>
               </div>
             )}
           </div>

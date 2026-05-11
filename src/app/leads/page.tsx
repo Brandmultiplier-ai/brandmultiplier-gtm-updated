@@ -27,6 +27,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Lead, LeadStatus } from "@/lib/types";
 import { useAppStore } from "@/stores/app-store";
+import { CsvImportDialog } from "@/components/leads/csv-import-dialog";
 
 // ── Components ─────────────────────────────────────────────────────────
 
@@ -116,10 +117,15 @@ interface ContactListItem {
   updatedAt: string;
 }
 
+type LeadWithCampaign = Lead & {
+  campaignName?: string | null;
+  campaignStatus?: string | null;
+};
+
 // ── Page ───────────────────────────────────────────────────────────────
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeads] = useState<LeadWithCampaign[]>([]);
   const [lists, setLists] = useState<ContactListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const searchQuery = useAppStore((state) => state.leadsSearch);
@@ -131,6 +137,8 @@ export default function LeadsPage() {
   const [newListName, setNewListName] = useState("");
   const [targetListId, setTargetListId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   function loadData() {
     setLoading(true);
@@ -164,7 +172,8 @@ export default function LeadsPage() {
         !searchQuery ||
         l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         l.headline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.location.toLowerCase().includes(searchQuery.toLowerCase())
+        l.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (l.campaignName || "").toLowerCase().includes(searchQuery.toLowerCase())
     );
 
   const sentCount = leads.filter((l) => l.status === "invite_sent").length;
@@ -191,13 +200,14 @@ export default function LeadsPage() {
     else setSelected(new Set(filtered.map((l) => l.id)));
   }
 
-  function exportCsv(rows: Lead[], fileName: string) {
+  function exportCsv(rows: LeadWithCampaign[], fileName: string) {
     const csv = [
-      ["Name", "Headline", "Location", "Signal", "AI Score", "Status", "Segment", "Language"],
+      ["Name", "Headline", "Location", "Campaign", "Signal", "AI Score", "Status", "Segment", "Language"],
       ...rows.map((lead) => [
         lead.name,
         lead.headline,
         lead.location,
+        lead.campaignName || lead.campaignId,
         lead.signal,
         String(lead.aiScore),
         STATUS_CONFIG[lead.status]?.label || lead.status,
@@ -344,6 +354,11 @@ export default function LeadsPage() {
 
       {viewTab === "contacts" ? (
         <>
+          {importMessage ? (
+            <div className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
+              {importMessage}
+            </div>
+          ) : null}
           <div className="flex items-center gap-3">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-stone" />
@@ -393,7 +408,11 @@ export default function LeadsPage() {
                 <Download className="size-3.5" /> Export ({selected.size})
               </Button>
             )}
-            <Button size="sm" className="gap-1.5 bg-brand text-white hover:bg-brand-hover">
+            <Button
+              size="sm"
+              className="gap-1.5 bg-brand text-white hover:bg-brand-hover"
+              onClick={() => setImportDialogOpen(true)}
+            >
               <Plus className="size-3.5" /> Add leads
             </Button>
           </div>
@@ -411,6 +430,7 @@ export default function LeadsPage() {
                     />
                   </TableHead>
                   <TableHead className="text-[10px] uppercase tracking-[0.2em] text-stone">Contact</TableHead>
+                  <TableHead className="text-[10px] uppercase tracking-[0.2em] text-stone">Campaign</TableHead>
                   <TableHead className="text-[10px] uppercase tracking-[0.2em] text-stone">Signal</TableHead>
                   <TableHead className="text-center text-[10px] uppercase tracking-[0.2em] text-stone">AI Score</TableHead>
                   <TableHead className="text-center text-[10px] uppercase tracking-[0.2em] text-stone">Status</TableHead>
@@ -421,7 +441,7 @@ export default function LeadsPage() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-stone py-12">
+                    <TableCell colSpan={8} className="text-center text-stone py-12">
                       {leads.length === 0
                         ? "No leads yet. Run an outreach campaign to find prospects."
                         : "No leads match your filters."}
@@ -459,6 +479,16 @@ export default function LeadsPage() {
                             <p className="text-xs text-stone">{lead.headline}</p>
                             <p className="text-xs text-stone">{lead.location}</p>
                           </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-foreground">
+                            {lead.campaignName || "Unknown campaign"}
+                          </p>
+                          <p className="text-[10px] uppercase tracking-[0.16em] text-stone">
+                            {lead.campaignStatus || "Campaign"}
+                          </p>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -594,6 +624,7 @@ export default function LeadsPage() {
                   <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
                       <TableHead className="text-[10px] uppercase tracking-[0.2em] text-stone">Contact</TableHead>
+                      <TableHead className="text-[10px] uppercase tracking-[0.2em] text-stone">Campaign</TableHead>
                       <TableHead className="text-[10px] uppercase tracking-[0.2em] text-stone">Signal</TableHead>
                       <TableHead className="text-center text-[10px] uppercase tracking-[0.2em] text-stone">AI Score</TableHead>
                       <TableHead className="text-center text-[10px] uppercase tracking-[0.2em] text-stone">Status</TableHead>
@@ -603,7 +634,7 @@ export default function LeadsPage() {
                   <TableBody>
                     {listLeads.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-stone py-12">
+                        <TableCell colSpan={6} className="text-center text-stone py-12">
                           This list is empty.
                         </TableCell>
                       </TableRow>
@@ -630,6 +661,16 @@ export default function LeadsPage() {
                                 </div>
                                 <p className="text-xs text-stone">{lead.headline}</p>
                               </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-foreground">
+                                {lead.campaignName || "Unknown campaign"}
+                              </p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-stone">
+                                {lead.campaignStatus || "Campaign"}
+                              </p>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -671,6 +712,16 @@ export default function LeadsPage() {
           </div>
         </div>
       )}
+      <CsvImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImported={(summary) => {
+          setImportMessage(
+            `Imported ${summary.imported}/${summary.total} contacts (${summary.duplicate} duplicates, ${summary.invalid} invalid).`,
+          );
+          loadData();
+        }}
+      />
     </div>
   );
 }

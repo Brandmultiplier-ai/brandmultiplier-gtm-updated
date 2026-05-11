@@ -13,17 +13,37 @@ export async function GET(req: NextRequest) {
   const statusFilter = req.nextUrl.searchParams.get("status") as LeadStatus | null;
 
   if (campaignId) {
-    const leads = await store.listLeads(campaignId, {
-      workspaceId,
-      ...(statusFilter ? { status: statusFilter } : {}),
+    const [campaigns, leads] = await Promise.all([
+      store.listCampaigns({ workspaceId }),
+      store.listLeads(campaignId, {
+        workspaceId,
+        ...(statusFilter ? { status: statusFilter } : {}),
+      }),
+    ]);
+    const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+    return NextResponse.json({
+      leads: leads.map((lead) => ({
+        ...lead,
+        campaignName: campaignById.get(lead.campaignId)?.name || "Unknown campaign",
+        campaignStatus: campaignById.get(lead.campaignId)?.status || null,
+      })),
     });
-    return NextResponse.json({ leads });
   }
 
   // All leads across campaigns
-  const leads = await store.getAllLeads({
-    workspaceId,
-    ...(statusFilter ? { status: statusFilter } : {}),
+  const [campaigns, leads] = await Promise.all([
+    store.listCampaigns({ workspaceId }),
+    store.getAllLeads({
+      workspaceId,
+      ...(statusFilter ? { status: statusFilter } : {}),
+    }),
+  ]);
+  const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+  return NextResponse.json({
+    leads: leads.map((lead) => ({
+      ...lead,
+      campaignName: campaignById.get(lead.campaignId)?.name || "Unknown campaign",
+      campaignStatus: campaignById.get(lead.campaignId)?.status || null,
+    })),
   });
-  return NextResponse.json({ leads });
 }

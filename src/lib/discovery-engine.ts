@@ -370,14 +370,23 @@ async function discoverFromKeywordSearch(
   maxResults: number
 ): Promise<RawCandidate[]> {
   const candidates: RawCandidate[] = [];
-  const keywords = getConfiguredTopics(agent.signals);
+  const configuredTopics = getConfiguredTopics(agent.signals);
+  const fallbackTopics = [
+    ...agent.icp.jobTitles,
+    ...agent.icp.industries,
+  ].map((value) => value.trim()).filter(Boolean);
+  const keywords = configuredTopics.length > 0 ? configuredTopics : fallbackTopics;
   const titleFilter = agent.icp.jobTitles.slice(0, 5).join(" OR ");
   const locationFilter = agent.icp.locations.map((l) => l.toLowerCase());
 
+  if (keywords.length === 0) {
+    warn("keyword_search: no engagement keywords/topics or ICP title/industry fallbacks configured");
+    return candidates;
+  }
+
   // Use max 2 keyword searches to stay within rate limits
   for (const kw of keywords.slice(0, 2)) {
-    const result = await searchPeople(kw, titleFilter);
-    const items = result?.items || [];
+    const items = await searchPeople(kw, titleFilter);
 
     for (const person of items) {
       if (candidates.length >= maxResults) break;
@@ -1040,8 +1049,7 @@ async function discoverFromJobChanges(
   if (!searchTerms) return candidates;
 
   try {
-    const result = await searchPeople(searchTerms);
-    const items = result?.items || [];
+    const items = await searchPeople(searchTerms);
 
     for (const person of items) {
       if (candidates.length >= maxResults) break;

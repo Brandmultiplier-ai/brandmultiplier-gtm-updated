@@ -1,6 +1,6 @@
 import * as store from "@/lib/store";
 import { getJsonCache, setJsonCache } from "@/lib/redis-cache";
-import type { Campaign, DashboardPeriod, DashboardSnapshot, Lead, LeadEvent } from "@/lib/types";
+import type { Campaign, DashboardPeriod, DashboardSnapshot, Lead, LeadEvent, SignalCandidate } from "@/lib/types";
 
 function getPeriodStart(now: Date, period: DashboardPeriod): Date {
   const start = new Date(now);
@@ -22,18 +22,29 @@ function leadHasEventInPeriod(lead: Lead, types: LeadEvent["type"][], start: Dat
   return lead.events.some((event) => types.includes(event.type) && isWithinPeriod(event.ts, start, end));
 }
 
-function computePeriodStats(leads: Lead[], start: Date, end: Date) {
-  const discovered = leads.filter((lead) => isWithinPeriod(lead.createdAt, start, end));
+function computePeriodStats(leads: Lead[], signals: SignalCandidate[], start: Date, end: Date) {
+  const campaignLeads = leads.filter((lead) => isWithinPeriod(lead.createdAt, start, end));
+  const discoveredSignals = signals.filter((signal) => isWithinPeriod(signal.createdAt, start, end));
+  const promotedSignals = signals.filter((signal) => signal.status === "promoted" && isWithinPeriod(signal.updatedAt, start, end));
+  const highIntentSignals = signals.filter((signal) => signal.intentScore >= 4 && isWithinPeriod(signal.createdAt, start, end));
   const contacted = leads.filter((lead) => leadHasEventInPeriod(lead, ["invite_sent"], start, end));
   const accepted = leads.filter((lead) => leadHasEventInPeriod(lead, ["accepted"], start, end));
   const replied = leads.filter((lead) => leadHasEventInPeriod(lead, ["replied"], start, end));
   const pending = leads.filter((lead) => leadHasEventInPeriod(lead, ["rate_limited"], start, end));
+  const conversationLeads = leads.filter((lead) => (
+    ((lead.status === "replied" || lead.status === "interested") && isWithinPeriod(lead.updatedAt, start, end)) ||
+    leadHasEventInPeriod(lead, ["replied"], start, end)
+  ));
   return {
     totalContacted: contacted.length,
-    totalDiscovered: discovered.length,
+    totalDiscovered: discoveredSignals.length,
+    totalCampaignLeads: campaignLeads.length,
+    totalPromoted: promotedSignals.length,
     totalSent: contacted.length,
     totalAccepted: accepted.length,
     totalReplied: replied.length,
+    totalConversations: conversationLeads.length,
+    highIntentSignals: highIntentSignals.length,
     totalPending: pending.length,
     connectRate: contacted.length > 0 ? Math.round((accepted.length / contacted.length) * 100) : 0,
     replyRate: contacted.length > 0 ? Math.round((replied.length / contacted.length) * 100) : 0,
@@ -66,15 +77,16 @@ function countInvitesThisWeek(leads: Lead[], now: Date) {
 }
 
 export async function computeDashboardPayload(workspaceId: string, period: DashboardPeriod) {
-  const [agents, campaigns, allLeads] = await Promise.all([
+  const [agents, campaigns, allLeads, signalCandidates] = await Promise.all([
     store.listAgents(workspaceId),
     store.listCampaigns({ workspaceId }),
     store.getAllLeads({ workspaceId }),
+    store.listSignalCandidates({ workspaceId, limit: 5000 }),
   ]);
   const now = new Date();
   const periodStart = getPeriodStart(now, period);
   const stats = {
-    ...computePeriodStats(allLeads, periodStart, now),
+    ...computePeriodStats(allLeads, signalCandidates, periodStart, now),
     activeAgents: agents.filter((agent) => agent.status === "active").length,
     activeCampaigns: campaigns.filter((campaign) => campaign.status === "active").length,
   };
@@ -93,6 +105,13 @@ export async function computeDashboardPayload(workspaceId: string, period: Dashb
   for (let d = new Date(periodStart); d <= now; d.setDate(d.getDate() + 1)) {
     dayMap[d.toISOString().slice(0, 10)] = { discovered: 0, invited: 0, messaged: 0, accepted: 0, replied: 0 };
   }
+  const periodSignalCount = signalCandidates.filter((signal) => isWithinPeriod(signal.createdAt, periodStart, now)).length;
+  for (const signal of signalCandidates) {
+    const createdDay = signal.createdAt.slice(0, 10);
+    if (isWithinPeriod(signal.createdAt, periodStart, now) && dayMap[createdDay]) {
+      dayMap[createdDay].discovered++;
+    }
+  }
   for (const lead of allLeads) {
     for (const event of lead.events) {
       if (!isWithinPeriod(event.ts, periodStart, now)) continue;
@@ -105,7 +124,7 @@ export async function computeDashboardPayload(workspaceId: string, period: Dashb
       else if (event.type === "replied") dayMap[day].replied++;
     }
     const createdDay = lead.createdAt.slice(0, 10);
-    if (isWithinPeriod(lead.createdAt, periodStart, now) && dayMap[createdDay] && !lead.events.some((event) => event.type === "discovered")) {
+    if (periodSignalCount === 0 && isWithinPeriod(lead.createdAt, periodStart, now) && dayMap[createdDay] && !lead.events.some((event) => event.type === "discovered")) {
       dayMap[createdDay].discovered++;
     }
   }
@@ -141,7 +160,7 @@ export async function computeDashboardPayload(workspaceId: string, period: Dashb
 }
 
 function cacheKey(workspaceId: string, period: DashboardPeriod) {
-  return `dashboard:${workspaceId}:${period}`;
+  return `dashboard:v2:${workspaceId}:${period}`;
 }
 
 export async function refreshDashboardSnapshot(
@@ -165,6 +184,11 @@ export async function getDashboardSnapshotPayload(workspaceId: string, period: D
 
   const saved = await store.getDashboardSnapshot(workspaceId, period);
   if (saved?.payload) {
+    const stats = (saved.payload as { stats?: { totalCampaignLeads?: number } }).stats;
+    if (typeof stats?.totalCampaignLeads !== "number") {
+      const fresh = await refreshDashboardSnapshot(workspaceId, period);
+      return { ...fresh.payload, cached: false, computedAt: fresh.computedAt };
+    }
     await setJsonCache(cacheKey(workspaceId, period), saved, 3600);
     return { ...saved.payload, cached: true, computedAt: saved.computedAt };
   }

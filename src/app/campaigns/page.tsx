@@ -9,6 +9,7 @@ import {
   Copy,
   Pause,
   Play,
+  Pencil,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,13 +62,15 @@ export default function CampaignsPage() {
         return;
       }
       const agentId = agents[0].id;
+      const campaignName = window.prompt("Campaign name", `Campaign ${new Date().toISOString().slice(0, 10)}`)?.trim();
+      if (!campaignName) return;
 
       const res = await apiFetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agentId,
-          name: `Campaign ${new Date().toISOString().slice(0, 10)}`,
+          name: campaignName,
           status: "draft",
           segment: "default",
           search: {
@@ -104,6 +107,26 @@ export default function CampaignsPage() {
       else loadCampaigns();
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function renameCampaign(campaign: CampaignWithStats) {
+    const nextName = window.prompt("Rename campaign", campaign.name)?.trim();
+    if (!nextName || nextName === campaign.name) return;
+    setBusyId(campaign.id);
+    try {
+      const res = await apiFetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...campaign,
+          name: nextName,
+        }),
+      });
+      if (!res.ok) throw new Error("Rename failed");
+      loadCampaigns();
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -241,6 +264,14 @@ export default function CampaignsPage() {
                     >
                       {c.status === "active" ? <Pause className="size-3" /> : <Play className="size-3" />}
                       {c.status === "active" ? "Pause" : "Activate"}
+                    </button>
+                    <button
+                      onClick={() => { void renameCampaign(c); }}
+                      disabled={busyId === c.id}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 disabled:opacity-50"
+                    >
+                      <Pencil className="size-3" />
+                      Rename
                     </button>
                     <button
                       onClick={() => runCampaignAction(c.id, "duplicate")}
