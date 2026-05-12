@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
       );
     }
     const hash = await bcrypt.hash(password, 10);
-    const user = await createAppUser(nEmail, hash);
-    await ensureDefaultMembershipsForAllWorkspaces(user.id, "owner");
+    const user = await createAppUser(nEmail, hash, { globalRole: "super admin" });
+    await ensureDefaultMembershipsForAllWorkspaces(user.id, "workspace admin");
   }
 
   const row = await getAppUserWithPasswordForLogin(nEmail);
@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid credentials" }, { status: 401 });
   }
 
-  const token = await signSessionToken(row.id, row.email);
+  const globalRole = row.globalRole === "super admin" ? "super admin" : "member";
+  const token = await signSessionToken(row.id, row.email, globalRole);
   const members = await listWorkspaceMembershipsForUser(row.id);
   const firstWs = members[0]?.workspaceId;
 

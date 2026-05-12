@@ -8,10 +8,14 @@ export interface SessionUser {
   id: string;
   email: string;
   displayName?: string;
+  /** Platform role from server */
+  globalRole?: "super admin" | "member";
   profileSettings?: {
     title?: string;
     phone?: string;
     timezone?: string;
+    linkedinProfileUrl?: string;
+    linkedinPublicIdentifier?: string;
   };
 }
 
@@ -35,7 +39,7 @@ export interface WorkspaceSummary {
 export interface WorkspaceMembershipSummary {
   userId: string;
   workspaceId: string;
-  role: "owner" | "admin" | "operator" | "viewer";
+  role: "workspace admin" | "user";
   createdAt: string;
 }
 
@@ -45,6 +49,10 @@ export interface SeatProfileSummary {
   workspaceId: string;
   profileName?: string;
   profilePictureUrl?: string;
+  profilePublicIdentifier?: string;
+  profileUrl?: string;
+  unipileAccountId?: string;
+  status?: "active" | "paused";
 }
 
 type LoadState = "idle" | "loading" | "ready" | "error";
@@ -55,6 +63,7 @@ interface AppStore {
   sessionStatus: LoadState;
   sessionError: string | null;
   workspaces: WorkspaceSummary[];
+  superAdmin: boolean;
   activeWorkspaceId: string | null;
   workspaceStatus: LoadState;
   workspaceError: string | null;
@@ -75,6 +84,8 @@ interface AppStore {
   setUniboxSearch: (value: string) => void;
   setLeadsSearch: (value: string) => void;
   setSignalsQuery: (value: string) => void;
+  /** Clears session client state, clears cookies via API, then navigates to /login. */
+  signOut: () => Promise<void>;
 }
 
 function messageFromError(error: unknown): string {
@@ -89,6 +100,7 @@ export const useAppStore = create<AppStore>()(
       sessionStatus: "idle",
       sessionError: null,
       workspaces: [],
+      superAdmin: false,
       activeWorkspaceId: null,
       workspaceStatus: "idle",
       workspaceError: null,
@@ -135,10 +147,11 @@ export const useAppStore = create<AppStore>()(
         try {
           const res = await apiFetch("/api/workspaces");
           if (!res.ok) throw new Error(`Workspace request failed (${res.status})`);
-          const data = await res.json() as { workspaces?: WorkspaceSummary[] };
+          const data = await res.json() as { workspaces?: WorkspaceSummary[]; superAdmin?: boolean };
           const workspaces = data.workspaces || [];
           set((state) => ({
             workspaces,
+            superAdmin: Boolean(data.superAdmin),
             activeWorkspaceId: state.activeWorkspaceId || workspaces[0]?.id || null,
             workspaceStatus: "ready",
             workspaceError: null,
@@ -165,9 +178,29 @@ export const useAppStore = create<AppStore>()(
         try {
           const res = await apiFetch("/api/linkedin-seats");
           if (!res.ok) throw new Error(`Profile request failed (${res.status})`);
-          const data = await res.json() as { seats?: SeatProfileSummary[] };
+          const data = await res.json() as { seats?: Record<string, unknown>[] };
+          const raw = data.seats?.[0];
+          let primarySeat: SeatProfileSummary | null = null;
+          if (raw && typeof raw.id === "string" && typeof raw.workspaceId === "string") {
+            const st = raw.status;
+            const seatStatus: SeatProfileSummary["status"] =
+              st === "active" ? "active" : st === "paused" ? "paused" : undefined;
+            primarySeat = {
+              id: raw.id,
+              name: typeof raw.name === "string" ? raw.name : "",
+              workspaceId: raw.workspaceId,
+              profileName: typeof raw.profileName === "string" ? raw.profileName : undefined,
+              profilePictureUrl: typeof raw.profilePictureUrl === "string" ? raw.profilePictureUrl : undefined,
+              profilePublicIdentifier: typeof raw.profilePublicIdentifier === "string"
+                ? raw.profilePublicIdentifier
+                : undefined,
+              profileUrl: typeof raw.profileUrl === "string" ? raw.profileUrl : undefined,
+              unipileAccountId: typeof raw.unipileAccountId === "string" ? raw.unipileAccountId : undefined,
+              status: seatStatus,
+            };
+          }
           set({
-            primarySeat: data.seats?.[0] || null,
+            primarySeat,
             profileStatus: "ready",
             profileError: null,
           });
@@ -181,6 +214,31 @@ export const useAppStore = create<AppStore>()(
       setUniboxSearch: (uniboxSearch) => set({ uniboxSearch }),
       setLeadsSearch: (leadsSearch) => set({ leadsSearch }),
       setSignalsQuery: (signalsQuery) => set({ signalsQuery }),
+
+      signOut: async () => {
+        try {
+          await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+        } catch {
+          /* still clear local state */
+        }
+        set({
+          user: null,
+          memberships: [],
+          workspaces: [],
+          superAdmin: false,
+          activeWorkspaceId: null,
+          primarySeat: null,
+          sessionStatus: "idle",
+          sessionError: null,
+          workspaceStatus: "idle",
+          workspaceError: null,
+          profileStatus: "idle",
+          profileError: null,
+        });
+        if (typeof window !== "undefined") {
+          window.location.assign("/login");
+        }
+      },
     }),
     {
       name: "brandmultiplier-gtm:app-store",

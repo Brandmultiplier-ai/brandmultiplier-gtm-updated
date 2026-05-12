@@ -1,4 +1,4 @@
-import type { AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
+import type { AppGlobalRole, AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
 import { isSupabaseStorageEnabled } from "./storage-mode";
 import * as local from "./app-auth-persistence-local";
 import * as supa from "./app-auth-persistence-supabase";
@@ -26,8 +26,9 @@ export async function getAppUserWithPasswordForLogin(
 export async function createAppUser(
   email: string,
   passwordHash: string,
+  opts?: { globalRole?: AppGlobalRole },
 ): Promise<AppUser> {
-  return backend().createAppUser(email, passwordHash);
+  return backend().createAppUser(email, passwordHash, opts);
 }
 
 export async function updateAppUserProfile(
@@ -96,7 +97,7 @@ export async function markWorkspaceInviteAccepted(
 
 export async function ensureDefaultMembershipsForAllWorkspaces(
   userId: string,
-  role: WorkspaceRole = "owner",
+  role: WorkspaceRole = "workspace admin",
 ): Promise<void> {
   return backend().ensureDefaultMembershipsForAllWorkspaces(userId, role);
 }

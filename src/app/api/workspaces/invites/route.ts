@@ -3,11 +3,11 @@ import {
   createWorkspaceInvite,
   listWorkspaceInvites,
 } from "@/lib/app-auth-persistence";
-import { canManageWorkspaceSettings, requireAppWorkspaceRead } from "@/lib/auth/resolve-app-workspace";
+import { canInviteToWorkspace, requireAppWorkspaceRead } from "@/lib/auth/resolve-app-workspace";
 import { createInviteToken, hashInviteToken } from "@/lib/workspace-invites";
 import type { WorkspaceRole } from "@/lib/types";
 
-const VALID_ROLES = new Set<WorkspaceRole>(["admin", "operator", "viewer"]);
+const VALID_ROLES = new Set<WorkspaceRole>(["workspace admin", "user"]);
 
 function inviteUrl(req: NextRequest, token: string) {
   const base = process.env.BM_GTM_APP_URL || req.nextUrl.origin;
@@ -17,7 +17,7 @@ function inviteUrl(req: NextRequest, token: string) {
 export async function GET(req: NextRequest) {
   const $wsa = await requireAppWorkspaceRead(req);
   if (!$wsa.ok) return $wsa.response;
-  if (!canManageWorkspaceSettings($wsa.value.role)) {
+  if (!canInviteToWorkspace($wsa.value.role)) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -31,12 +31,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const $wsa = await requireAppWorkspaceRead(req);
   if (!$wsa.ok) return $wsa.response;
-  if (!canManageWorkspaceSettings($wsa.value.role)) {
+  if (!canInviteToWorkspace($wsa.value.role)) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({})) as { role?: WorkspaceRole; expiresInDays?: number };
-  const role = VALID_ROLES.has(body.role as WorkspaceRole) ? body.role as WorkspaceRole : "operator";
+  const role = VALID_ROLES.has(body.role as WorkspaceRole) ? body.role as WorkspaceRole : "user";
   const expiresInDays = Math.max(1, Math.min(30, Number(body.expiresInDays || 7)));
   const token = createInviteToken();
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();

@@ -2,8 +2,9 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import * as store from "./store";
 import { dataPath } from "./data-paths";
-import type { AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
+import type { AppGlobalRole, AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
 import { normalizeAppEmail } from "./auth/email";
+import { normalizeAppGlobalRoleFromStorage, normalizeWorkspaceRoleFromStorage } from "@/lib/auth/role-values";
 
 const AUTH_FILE = () => dataPath("app-auth.json");
 
@@ -14,6 +15,7 @@ type AuthFile = {
     passwordHash: string;
     displayName?: string;
     profileSettings?: AppUser["profileSettings"];
+    globalRole?: AppGlobalRole;
     createdAt: string;
     updatedAt: string;
   }>;
@@ -56,9 +58,11 @@ function writeAuth(data: AuthFile) {
 }
 
 function mapUser(row: AuthFile["users"][0]): AppUser {
+  const globalRole = normalizeAppGlobalRoleFromStorage(row.globalRole);
   return {
     id: row.id,
     email: row.email,
+    globalRole,
     displayName: row.displayName,
     profileSettings: row.profileSettings || {},
     createdAt: row.createdAt,
@@ -70,13 +74,16 @@ function mapM(row: AuthFile["memberships"][0]): WorkspaceMembership {
   return {
     userId: row.userId,
     workspaceId: row.workspaceId,
-    role: row.role,
+    role: normalizeWorkspaceRoleFromStorage(row.role),
     createdAt: row.createdAt,
   };
 }
 
 function mapInvite(row: NonNullable<AuthFile["invites"]>[0]): WorkspaceInvite {
-  return { ...row };
+  return {
+    ...row,
+    role: normalizeWorkspaceRoleFromStorage(row.role),
+  };
 }
 
 export async function getAppUserById(id: string): Promise<AppUser | null> {
@@ -102,7 +109,11 @@ export async function getAppUserWithPasswordForLogin(
   return { ...mapUser(u), passwordHash: u.passwordHash };
 }
 
-export async function createAppUser(email: string, passwordHash: string): Promise<AppUser> {
+export async function createAppUser(
+  email: string,
+  passwordHash: string,
+  opts?: { globalRole?: AppGlobalRole },
+): Promise<AppUser> {
   const n = normalizeAppEmail(email);
   const auth = readAuth();
   if (auth.users.some((u) => u.email === n)) {
@@ -110,12 +121,14 @@ export async function createAppUser(email: string, passwordHash: string): Promis
   }
   const now = new Date().toISOString();
   const id = `usr_${[...Array(8)].map(() => "abcdefghijklmnopqrstuvwxyz0123456789".charAt(Math.floor(Math.random() * 36))).join("")}`;
+  const globalRole: AppGlobalRole = opts?.globalRole === "super admin" ? "super admin" : "member";
   const row = {
     id,
     email: n,
     passwordHash,
     displayName: n.split("@")[0],
     profileSettings: {},
+    globalRole,
     createdAt: now,
     updatedAt: now,
   };
@@ -133,8 +146,11 @@ export async function updateAppUserProfile(
   if (idx < 0) throw new Error("User not found");
   auth.users[idx] = {
     ...auth.users[idx],
-    displayName: patch.displayName,
-    profileSettings: patch.profileSettings || {},
+    displayName: patch.displayName ?? auth.users[idx].displayName,
+    profileSettings: {
+      ...(auth.users[idx].profileSettings || {}),
+      ...(patch.profileSettings || {}),
+    },
     updatedAt: new Date().toISOString(),
   };
   writeAuth(auth);

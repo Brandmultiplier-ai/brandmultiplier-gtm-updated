@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
+import type { AppGlobalRole } from "@/lib/types";
 
 const ALG = "HS256" as const;
 
@@ -14,15 +15,22 @@ export interface SessionTokenPayload extends JWTPayload {
   sub: string;
   email: string;
   typ: "bm_gtm_session";
+  /** Platform role; legacy tokens used super_admin without space */
+  bm_gr?: AppGlobalRole | "super_admin";
 }
 
 const JWT_ISS = "brandmultiplier-gtm" as const;
 const JWT_MAX_AGE = 60 * 60 * 24 * 7; // 7d
 
-export async function signSessionToken(userId: string, email: string): Promise<string> {
+export async function signSessionToken(
+  userId: string,
+  email: string,
+  globalRole: AppGlobalRole = "member",
+): Promise<string> {
   return new SignJWT({
     typ: "bm_gtm_session",
     email,
+    bm_gr: globalRole,
   })
     .setProtectedHeader({ alg: ALG })
     .setSubject(userId)
@@ -40,7 +48,16 @@ export async function verifySessionToken(token: string): Promise<SessionTokenPay
   if ((payload as SessionTokenPayload).typ !== "bm_gtm_session") {
     throw new Error("Invalid session token type");
   }
-  return payload as SessionTokenPayload;
+  const p = payload as SessionTokenPayload;
+  if (
+    p.bm_gr !== undefined
+    && p.bm_gr !== "super admin"
+    && p.bm_gr !== "super_admin"
+    && p.bm_gr !== "member"
+  ) {
+    throw new Error("Invalid session token role");
+  }
+  return p;
 }
 
 export { JWT_MAX_AGE };

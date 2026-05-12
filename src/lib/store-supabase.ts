@@ -471,7 +471,7 @@ function leadToRow(lead: Lead): LeadRow {
     profile_picture_url: lead.profilePictureUrl || null,
     segment: lead.segment,
     language: lead.language,
-    ai_score: lead.aiScore,
+    ai_score: Math.round(Number(lead.aiScore) || 0),
     signal: lead.signal,
     status: lead.status,
     current_step: lead.currentStep,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,10 +16,12 @@ import {
   ChevronRight,
   Sparkles,
   Inbox,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogoBlock } from "@/components/brand-logo";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/stores/app-store";
 
 interface NavItem {
@@ -52,6 +54,9 @@ export function Sidebar() {
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const seatProfile = useAppStore((state) => state.primarySeat);
   const refreshProfile = useAppStore((state) => state.refreshProfile);
+  const signOut = useAppStore((state) => state.signOut);
+  const sessionUser = useAppStore((state) => state.user);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     void refreshProfile();
@@ -83,11 +88,9 @@ export function Sidebar() {
         <BrandLogoBlock collapsed={collapsed} />
       </div>
 
-      {!collapsed ? (
-        <div className="px-0 border-b border-border">
-          <WorkspaceSwitcher />
-        </div>
-      ) : null}
+      <div className={cn("border-b border-border", collapsed && "px-0")}>
+        <WorkspaceSwitcher collapsed={collapsed} />
+      </div>
 
       {/* Collapse toggle */}
       <div className={cn(
@@ -178,13 +181,13 @@ export function Sidebar() {
         })}
       </div>
 
-      {/* User avatar */}
+      {/* User avatar + sign out */}
       <div className={cn(
-        "border-t border-border py-4",
-        collapsed ? "flex justify-center px-3" : "px-4"
+        "border-t border-border py-4 space-y-3",
+        collapsed ? "flex flex-col items-center px-3" : "px-4"
       )}>
         <div className={cn(
-          "flex items-center",
+          "flex items-center w-full",
           collapsed ? "justify-center" : "gap-3"
         )}>
           {seatProfile?.profilePictureUrl ? (
@@ -199,12 +202,36 @@ export function Sidebar() {
             </div>
           )}
           {!collapsed && (
-            <div className="overflow-hidden">
+            <div className="min-w-0 flex-1 overflow-hidden">
               <p className="font-ui text-xs font-medium text-foreground truncate">{sidebarUserName}</p>
               <p className="font-ui text-[10px] text-stone truncate">{sidebarSubLabel}</p>
+              {sessionUser?.email ? (
+                <p className="font-ui text-[10px] text-muted-foreground truncate mt-0.5" title={sessionUser.email}>
+                  {sessionUser.email}
+                </p>
+              ) : null}
             </div>
           )}
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size={collapsed ? "icon-sm" : "sm"}
+          disabled={loggingOut}
+          title="Log out"
+          aria-label="Log out"
+          className={cn(
+            "w-full border-border/90 text-stone hover:text-destructive hover:border-destructive/35 hover:bg-destructive/10 gap-2",
+            collapsed && "size-9 p-0",
+          )}
+          onClick={() => {
+            setLoggingOut(true);
+            void signOut().finally(() => setLoggingOut(false));
+          }}
+        >
+          <LogOut className="size-3.5 shrink-0" />
+          {!collapsed ? <span className="font-ui">{loggingOut ? "Signing out…" : "Log out"}</span> : null}
+        </Button>
       </div>
     </aside>
   );

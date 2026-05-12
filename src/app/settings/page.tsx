@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Settings,
@@ -22,9 +23,30 @@ import {
   AlertTriangle,
   CheckCircle2,
   RefreshCw,
+  ExternalLink,
+  ChevronRight,
+  Copy,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore, type WorkspaceSummary } from "@/stores/app-store";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -233,6 +255,9 @@ const tabs = [
   { id: "linkedin", label: "LinkedIn Accounts", icon: Linkedin },
 ] as const;
 
+/** Prefill when no LinkedIn URL is stored — change for other deployments */
+const DEFAULT_OWNER_LINKEDIN_URL = "https://www.linkedin.com/in/sivasish48";
+
 type TabId = (typeof tabs)[number]["id"];
 
 // ── Main Page ──────────────────────────────────────────────────────────
@@ -293,6 +318,16 @@ function SettingsPageContent() {
 
 type ReadinessPayload = {
   ok: boolean;
+  storage: {
+    configuredMode: string | null;
+    activeMode: "supabase" | "local";
+    supabaseDetected: boolean;
+    supabaseEnabledFlag: boolean;
+    hasSupabaseUrl: boolean;
+    hasServiceRoleKey: boolean;
+    localForced: boolean;
+    warning: string | null;
+  };
   checks: {
     openRouterApiKey: boolean;
     unipileApiKey: boolean;
@@ -300,6 +335,9 @@ type ReadinessPayload = {
     unipileAccountId: boolean;
     webhookSecret: boolean;
     cronSecret: boolean;
+    supabaseUrl: boolean;
+    supabaseServiceRoleKey: boolean;
+    supabaseStorage: boolean;
     seatsConfigured: boolean;
     connectedSeats: number;
     providerConnections: number;
@@ -308,6 +346,7 @@ type ReadinessPayload = {
     openRouterReady: boolean;
     unipileReady: boolean;
     automationReady: boolean;
+    storageReady: boolean;
     seatReady: boolean;
   };
   nextSteps: string[];
@@ -382,7 +421,16 @@ function IntegrationReadinessCard() {
 
       {payload ? (
         <>
+          {payload.storage.warning ? (
+            <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-xs text-warning">
+              <p className="font-medium text-foreground">Storage warning</p>
+              <p className="mt-1">{payload.storage.warning}</p>
+            </div>
+          ) : null}
           <div className="grid gap-2 md:grid-cols-2">
+            <ReadinessItem label={`Storage backend: ${payload.storage.activeMode}`} ok={payload.checks.supabaseStorage} />
+            <ReadinessItem label="Supabase URL" ok={payload.checks.supabaseUrl} />
+            <ReadinessItem label="Supabase service role" ok={payload.checks.supabaseServiceRoleKey} />
             <ReadinessItem label="OpenRouter API key" ok={payload.checks.openRouterApiKey} />
             <ReadinessItem label="Unipile API key" ok={payload.checks.unipileApiKey} />
             <ReadinessItem label="Unipile base URL" ok={payload.checks.unipileBaseUrl} />
@@ -1225,7 +1273,7 @@ function AITemplatesTab() {
 type WorkspaceMember = {
   userId: string;
   workspaceId: string;
-  role: "owner" | "admin" | "operator" | "viewer";
+  role: "workspace admin" | "user";
   email: string;
   createdAt: string;
 };
@@ -1246,11 +1294,16 @@ function activeWorkspace(workspaces: WorkspaceSummary[], activeWorkspaceId: stri
 function CompanyProfileTab() {
   const workspaces = useAppStore((state) => state.workspaces);
   const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
+  const user = useAppStore((state) => state.user);
+  const memberships = useAppStore((state) => state.memberships);
   const refreshWorkspaces = useAppStore((state) => state.refreshWorkspaces);
   const workspace = activeWorkspace(workspaces, activeWorkspaceId);
+  const activeRole = memberships.find((m) => m.workspaceId === activeWorkspaceId)?.role;
+  const canInvite =
+    Boolean(user?.globalRole === "super admin") || activeRole === "workspace admin";
   const [draft, setDraft] = useState<WorkspaceSummary | null>(workspace);
   const [inviteUrl, setInviteUrl] = useState("");
-  const [inviteRole, setInviteRole] = useState<WorkspaceMember["role"]>("operator");
+  const [inviteRole, setInviteRole] = useState<WorkspaceMember["role"]>("user");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -1341,25 +1394,31 @@ function CompanyProfileTab() {
           <p><span className="text-foreground">Workspace ID:</span> {draft.id}</p>
           <p><span className="text-foreground">Slug:</span> {draft.slug || "—"}</p>
         </div>
-        <label className="block text-sm">
-          <span className="text-[11px] uppercase tracking-[0.18em] text-stone">Invite role</span>
-          <select
-            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            value={inviteRole}
-            onChange={(event) => setInviteRole(event.target.value as WorkspaceMember["role"])}
-          >
-            <option value="operator">Operator</option>
-            <option value="viewer">Viewer</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
-        <button onClick={createInvite} className="btn-secondary">
-          <Send className="size-4" />
-          Create invite link
-        </button>
-        {inviteUrl ? (
-          <input readOnly className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs" value={inviteUrl} onFocus={(event) => event.currentTarget.select()} />
-        ) : null}
+        {canInvite ? (
+          <>
+            <div className="space-y-2">
+              <span className="text-[11px] uppercase tracking-[0.18em] text-stone block">Invite role</span>
+              <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v as WorkspaceMember["role"])}>
+                <SelectTrigger className="h-10 w-full rounded-xl border-border/90 bg-muted/20 dark:bg-muted/35">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">user</SelectItem>
+                  <SelectItem value="workspace admin">workspace admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="button" variant="secondary" className="w-full gap-2" onClick={() => void createInvite()}>
+              <Send className="size-4" />
+              Create invite link
+            </Button>
+            {inviteUrl ? (
+              <Input readOnly className="font-mono text-xs h-9 rounded-xl" value={inviteUrl} onFocus={(event) => event.currentTarget.select()} />
+            ) : null}
+          </>
+        ) : (
+          <p className="text-[11px] text-stone">Only workspace admin or super admin can create invites for this workspace. Use Organization for full invite tools.</p>
+        )}
       </div>
     </div>
   );
@@ -1371,17 +1430,23 @@ function AccountProfileTab() {
   const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
   const primarySeat = useAppStore((state) => state.primarySeat);
   const refreshSession = useAppStore((state) => state.refreshSession);
+  const refreshProfile = useAppStore((state) => state.refreshProfile);
   const workspace = activeWorkspace(workspaces, activeWorkspaceId);
-  const [displayName, setDisplayName] = useState(user?.displayName || "");
-  const [title, setTitle] = useState(user?.profileSettings?.title || "");
-  const [timezone, setTimezone] = useState(user?.profileSettings?.timezone || "");
+  const [displayName, setDisplayName] = useState("");
+  const [title, setTitle] = useState("");
+  const [timezone, setTimezone] = useState("");
+  const [linkedinProfileUrl, setLinkedinProfileUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    setDisplayName(user?.displayName || "");
-    setTitle(user?.profileSettings?.title || "");
-    setTimezone(user?.profileSettings?.timezone || "");
+    if (!user) return;
+    setDisplayName(user.displayName || "");
+    setTitle(user.profileSettings?.title || "");
+    setTimezone(user.profileSettings?.timezone || "");
+    setLinkedinProfileUrl(
+      user.profileSettings?.linkedinProfileUrl?.trim() || DEFAULT_OWNER_LINKEDIN_URL,
+    );
   }, [user]);
 
   async function saveAccount() {
@@ -1392,11 +1457,15 @@ function AccountProfileTab() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ displayName, profileSettings: { title, timezone } }),
+        body: JSON.stringify({
+          displayName,
+          profileSettings: { title, timezone, linkedinProfileUrl },
+        }),
       });
       const data = await res.json().catch(() => ({})) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to save account profile");
       await refreshSession();
+      await refreshProfile();
       setMessage("Account profile saved.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save account profile");
@@ -1405,30 +1474,139 @@ function AccountProfileTab() {
     }
   }
 
+  const resolvedLinkedInUrl =
+    primarySeat?.profileUrl?.trim()
+    || user?.profileSettings?.linkedinProfileUrl?.trim()
+    || null;
+  const senderLabel =
+    primarySeat?.profileName?.trim()
+    || primarySeat?.name?.trim()
+    || user?.displayName?.trim()
+    || user?.profileSettings?.linkedinPublicIdentifier
+    || "LinkedIn sender";
+  const senderConnected = Boolean(primarySeat?.unipileAccountId && primarySeat?.status === "active");
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-      <div className="clean-card p-6 space-y-4">
-        <h3 className="text-base font-medium text-foreground">Account Profile</h3>
-        <SettingsInput label="Display name" value={displayName} onChange={setDisplayName} />
-        <SettingsInput label="Email" value={user?.email || ""} onChange={() => undefined} disabled />
-        <SettingsInput label="Title" value={title} onChange={setTitle} />
-        <SettingsInput label="Timezone" value={timezone} onChange={setTimezone} placeholder="Europe/Lisbon" />
-        <button onClick={saveAccount} disabled={saving} className="btn-primary">
-          {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          Save account
-        </button>
-        {message ? <p className="text-xs text-stone">{message}</p> : null}
-      </div>
-      <div className="clean-card p-6 space-y-4">
-        <h3 className="text-base font-medium text-foreground">Current Workspace Detail</h3>
-        <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
-          <p className="font-medium text-foreground">{workspace?.name || "No workspace"}</p>
-          <p className="text-xs text-stone">{workspace?.id || "—"}</p>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-start">
+      <div className="clean-card overflow-hidden ring-1 ring-border/40">
+        <div className="border-b border-border/80 bg-muted/15 px-6 py-4">
+          <h3 className="text-lg font-semibold tracking-tight text-foreground">Account profile</h3>
+          <p className="text-[11px] text-stone mt-1 leading-relaxed">
+            How you appear inside BrandMultiplier and in automated outreach previews.
+          </p>
         </div>
-        <h3 className="text-base font-medium text-foreground">Current LinkedIn Account</h3>
-        <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
-          <p className="font-medium text-foreground">{primarySeat?.profileName || primarySeat?.name || "No LinkedIn account connected"}</p>
-          <p className="text-xs text-stone">{primarySeat?.workspaceId || workspace?.name || "—"}</p>
+        <div className="space-y-4 p-6">
+          <SettingsInput label="Display name" value={displayName} onChange={setDisplayName} />
+          <SettingsInput
+            label="Email"
+            value={user?.email || ""}
+            onChange={() => undefined}
+            disabled
+            hint="Provided by your login. Contact an admin to change."
+          />
+          <SettingsInput label="Title" value={title} onChange={setTitle} placeholder="e.g. Growth lead" />
+          <SettingsInput
+            label="Timezone"
+            value={timezone}
+            onChange={setTimezone}
+            placeholder="Europe/Lisbon"
+          />
+          <SettingsInput
+            label="Your LinkedIn profile"
+            value={linkedinProfileUrl}
+            onChange={setLinkedinProfileUrl}
+            placeholder={DEFAULT_OWNER_LINKEDIN_URL}
+            hint="Paste your public profile URL or handle (example: sivasish48)."
+          />
+
+          <div className="flex flex-col-reverse gap-3 border-t border-border/60 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p
+              className={cn(
+                "text-xs min-h-[1.25rem]",
+                message?.includes("Failed") || message?.includes("Invalid")
+                  ? "text-destructive"
+                  : "text-stone",
+              )}
+            >
+              {message || "\u00a0"}
+            </p>
+            <button type="button" onClick={() => void saveAccount()} disabled={saving} className="btn-primary shrink-0">
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              Save account
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="clean-card overflow-hidden ring-1 ring-border/40">
+          <div className="flex items-start gap-3 border-b border-border/80 bg-muted/15 px-5 py-4">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/12 text-orange-400 ring-1 ring-orange-500/20">
+              <Building2 className="size-[18px]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone">Current workspace</p>
+              <p className="mt-1 text-base font-medium text-foreground truncate">
+                {workspace?.name || "No workspace"}
+              </p>
+              <p className="text-[11px] text-stone font-mono mt-1 truncate">
+                {workspace?.id || "Select or join a workspace to continue"}
+              </p>
+            </div>
+          </div>
+          <div className="p-5">
+            <p className="text-xs text-stone leading-relaxed max-w-md">
+              Switch context from the sidebar, or invite teammates under Organization.
+            </p>
+          </div>
+        </div>
+
+        <div className="clean-card overflow-hidden ring-1 ring-orange-500/15">
+          <div className="flex items-start gap-3 border-b border-border/80 bg-orange-500/[0.06] px-5 py-4">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/25">
+              <Linkedin className="size-[18px]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone">LinkedIn sender</p>
+              <p className="mt-1 text-base font-medium text-foreground truncate">{senderLabel}</p>
+              <span
+                className={cn(
+                  "mt-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                  senderConnected
+                    ? "border-success/25 bg-success/10 text-success"
+                    : "border-border bg-muted/30 text-stone",
+                )}
+              >
+                {senderConnected ? "Unipile connected" : "Not connected"}
+              </span>
+            </div>
+            {resolvedLinkedInUrl ? (
+              <a
+                href={resolvedLinkedInUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost shrink-0 text-[11px] normal-case tracking-normal px-3 py-2"
+              >
+                <ExternalLink className="size-3.5" />
+                Profile
+              </a>
+            ) : null}
+          </div>
+          <div className="space-y-3 p-5">
+            <p className="text-xs text-stone leading-relaxed">
+              Messaging runs through Unipile. Save your LinkedIn URL on the left so this card stays aligned with your public profile.
+            </p>
+            <Link
+              href="/settings?tab=linkedin"
+              className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-orange-500/25 bg-orange-500/[0.07] px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-orange-500/[0.11]"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <Linkedin className="size-4 text-orange-400 shrink-0" />
+                <span className="truncate">Manage LinkedIn accounts and quotas</span>
+              </span>
+              <ChevronRight className="size-4 text-orange-400/90 shrink-0" />
+            </Link>
+          </div>
         </div>
       </div>
     </div>
@@ -1436,57 +1614,384 @@ function AccountProfileTab() {
 }
 
 function OrganizationTab() {
+  const user = useAppStore((state) => state.user);
+  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
+  const memberships = useAppStore((state) => state.memberships);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invites, setInvites] = useState<WorkspaceInviteSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"workspace admin" | "user">("user");
+  const [inviteExpiresDays, setInviteExpiresDays] = useState(7);
+  const [inviteSaving, setInviteSaving] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<WorkspaceMember | null>(null);
+  const [errorDialog, setErrorDialog] = useState<string | null>(null);
+
+  const activeRole = memberships.find((m) => m.workspaceId === activeWorkspaceId)?.role;
+  const canManageMembers =
+    Boolean(user?.globalRole === "super admin")
+    || activeRole === "workspace admin";
+
+  async function loadOrg() {
+    setLoading(true);
+    try {
+      const [memberRes, inviteRes] = await Promise.all([
+        fetch("/api/workspaces/members", { credentials: "include" }),
+        fetch("/api/workspaces/invites", { credentials: "include" }),
+      ]);
+      const memberData = await memberRes.json().catch(() => ({})) as { members?: WorkspaceMember[] };
+      const inviteData = inviteRes.ok
+        ? await inviteRes.json().catch(() => ({})) as { invites?: WorkspaceInviteSummary[] }
+        : { invites: [] };
+      setMembers(memberData.members || []);
+      setInvites(inviteData.invites || []);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/workspaces/members", { credentials: "include" }).then((res) => res.json()),
-      fetch("/api/workspaces/invites", { credentials: "include" }).then((res) => res.json()),
-    ])
-      .then(([memberData, inviteData]) => {
-        setMembers(memberData.members || []);
-        setInvites(inviteData.invites || []);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    void loadOrg();
+  }, [activeWorkspaceId]);
+
+  async function confirmRemoveMember() {
+    if (!removeTarget || !canManageMembers) return;
+    const userId = removeTarget.userId;
+    setRemovingId(userId);
+    try {
+      const res = await fetch(`/api/workspaces/members?userId=${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) throw new Error(body.error || "Failed to remove member");
+      setRemoveTarget(null);
+      await loadOrg();
+    } catch (e) {
+      setErrorDialog(e instanceof Error ? e.message : "Failed to remove member");
+      setRemoveTarget(null);
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  const inviteJoinUrl = useMemo(() => {
+    if (!lastInviteUrl) return null;
+    const em = inviteEmail.trim();
+    if (!em) return lastInviteUrl;
+    try {
+      const u = new URL(lastInviteUrl);
+      u.searchParams.set("email", em);
+      return u.toString();
+    } catch {
+      return lastInviteUrl;
+    }
+  }, [lastInviteUrl, inviteEmail]);
 
   if (loading) {
     return <EmptySettingsState title="Organization" description="Loading workspace members..." />;
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-      <div className="clean-card p-6">
-        <h3 className="text-base font-medium text-foreground mb-4">Workspace Members</h3>
-        <div className="space-y-2">
-          {members.map((member) => (
-            <div key={`${member.workspaceId}:${member.userId}`} className="flex items-center justify-between rounded-xl border border-border p-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">{member.email || member.userId}</p>
-                <p className="text-xs text-stone">{member.userId}</p>
-              </div>
-              <span className="rounded-full bg-muted px-2 py-1 text-xs capitalize text-stone">{member.role}</span>
-            </div>
-          ))}
+    <div className="space-y-6">
+      <div className="clean-card p-6 space-y-4">
+        <div className="flex items-start gap-3">
+          <Shield className="size-5 text-orange-400 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-base font-medium text-foreground">Roles & access</h3>
+            <p className="text-[11px] text-stone mt-1 leading-relaxed max-w-3xl">
+              Roles use the same labels in the database and in this screen: <strong className="text-foreground">super admin</strong>, <strong className="text-foreground">workspace admin</strong>, and <strong className="text-foreground">user</strong>.
+              {" "}
+              <strong className="text-foreground">super admin</strong> (stored on your account): lists every workspace, switches into any of them, edits or deletes any workspace, manages members in any workspace, and creates new workspaces (orange + in the sidebar). Invites use whichever workspace is currently selected.
+              {" "}
+              <strong className="text-foreground">workspace admin</strong> (stored on <code className="text-foreground">workspace_memberships.role</code>): can invite people only into the workspace they belong to and remove members there; cannot create, delete, or switch tenants like a super admin.
+              {" "}
+              <strong className="text-foreground">user</strong> (same column): joined via invite; can use and change campaigns, outreach, and the rest of the product in that workspace, but cannot manage members or workspace settings.
+              {" "}
+              Accounts that are not <strong className="text-foreground">super admin</strong> keep <code className="text-foreground">app_users.global_role</code> = <strong className="text-foreground">member</strong> (only the three names above apply to workspace invites and memberships).
+            </p>
+            {user?.globalRole === "super admin" ? (
+              <p className="mt-2 text-xs text-success">You are signed in as a super admin.</p>
+            ) : null}
+          </div>
         </div>
       </div>
-      <div className="clean-card p-6">
-        <h3 className="text-base font-medium text-foreground mb-4">Recent Invites</h3>
-        <div className="space-y-2">
-          {invites.length === 0 ? <p className="text-xs text-stone">No invite links yet.</p> : null}
-          {invites.map((invite) => (
-            <div key={invite.id} className="rounded-xl border border-border p-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="font-medium capitalize text-foreground">{invite.role}</span>
-                <span className="text-xs text-stone">{invite.acceptedAt ? "Accepted" : "Open"}</span>
-              </div>
-              <p className="mt-1 text-xs text-stone">Expires {formatShortDateTime(invite.expiresAt)}</p>
-            </div>
-          ))}
+
+      <div className="clean-card p-6 border border-success/20 bg-success/[0.04]">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-base font-medium text-foreground">Production LinkedIn sender (Unipile)</h3>
+            <p className="text-[11px] text-stone mt-1 max-w-xl">
+              Connect your live LinkedIn account through Unipile so outreach, inbox sync, and webhooks use the correct sender. Env keys and seat configuration live under LinkedIn Accounts.
+            </p>
+          </div>
+          <Link
+            href="/settings?tab=linkedin"
+            className="btn-secondary shrink-0 text-[11px] normal-case tracking-normal"
+          >
+            <Linkedin className="size-4" />
+            Open sender setup
+          </Link>
         </div>
       </div>
+
+      <div className="clean-card overflow-hidden border border-border ring-1 ring-orange-500/10">
+        <div className="border-b border-border bg-muted/15 px-5 py-4">
+          <h3 className="text-base font-medium text-foreground">Invite by email</h3>
+          <p className="text-[11px] text-stone mt-1 max-w-2xl leading-relaxed">
+            Enter their address and role. We generate a secure link for this workspace — the app does not send email automatically yet; use copy or open your mail client to send it to them.
+          </p>
+        </div>
+        <div className="p-5">
+        {!activeWorkspaceId ? (
+          <p className="text-sm text-warning">Select a workspace in the sidebar first.</p>
+        ) : !canManageMembers ? (
+          <p className="text-sm text-stone">Only workspace admin or super admin can create invites for this workspace.</p>
+        ) : (
+          <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-12 sm:items-end">
+              <label className="block text-sm sm:col-span-5">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Email address</span>
+                <Input
+                  type="email"
+                  autoComplete="off"
+                  placeholder="colleague@company.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className={cn(
+                    "mt-1.5 h-10 rounded-xl border-border/90 bg-muted/20 dark:bg-muted/35",
+                    "focus-visible:ring-orange-500/35",
+                  )}
+                />
+              </label>
+              <div className="block text-sm sm:col-span-3">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone block mb-1.5">Role</span>
+                <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v as "workspace admin" | "user")}>
+                  <SelectTrigger className="h-10 w-full rounded-xl border-border/90 bg-muted/20 dark:bg-muted/35">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">user</SelectItem>
+                    <SelectItem value="workspace admin">workspace admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="block text-sm sm:col-span-2">
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone block mb-1.5">Expires</span>
+                <Select
+                  value={String(inviteExpiresDays)}
+                  onValueChange={(v) => v && setInviteExpiresDays(Number(v) || 7)}
+                >
+                  <SelectTrigger className="h-10 w-full rounded-xl border-border/90 bg-muted/20 dark:bg-muted/35">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[3, 7, 14, 30].map((d) => (
+                      <SelectItem key={d} value={String(d)}>{d} days</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2 flex sm:justify-end">
+                <Button
+                  type="button"
+                  disabled={inviteSaving}
+                  className="w-full sm:w-auto h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-ui text-[11px] normal-case tracking-normal gap-2"
+                  onClick={async () => {
+                    const trimmed = inviteEmail.trim();
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+                      setInviteError("Enter a valid email address.");
+                      return;
+                    }
+                    setInviteSaving(true);
+                    setInviteError(null);
+                    setLastInviteUrl(null);
+                    setCopied(false);
+                    try {
+                      const res = await fetch("/api/workspaces/invites", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({
+                          role: inviteRole,
+                          expiresInDays: inviteExpiresDays,
+                        }),
+                      });
+                      const body = await res.json().catch(() => ({})) as { error?: string; url?: string };
+                      if (!res.ok) throw new Error(body.error || "Could not create invite");
+                      if (body.url) setLastInviteUrl(body.url);
+                      await loadOrg();
+                    } catch (e) {
+                      setInviteError(e instanceof Error ? e.message : "Invite failed");
+                    } finally {
+                      setInviteSaving(false);
+                    }
+                  }}
+                >
+                  {inviteSaving ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                  Create link
+                </Button>
+              </div>
+            </div>
+
+            {inviteError ? (
+              <p className="text-xs text-destructive">{inviteError}</p>
+            ) : null}
+
+            {lastInviteUrl ? (
+              <div className="rounded-xl border border-border bg-muted/15 p-4 space-y-3">
+                <p className="text-xs text-stone">
+                  Link for <span className="text-foreground font-medium">{inviteEmail.trim()}</span> — role <span className="text-foreground">{inviteRole}</span>
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    readOnly
+                    className="flex-1 font-mono text-xs h-9 rounded-lg bg-background"
+                    value={inviteJoinUrl ?? ""}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <div className="flex flex-wrap gap-2 shrink-0">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="text-[11px] normal-case gap-1.5"
+                      onClick={async () => {
+                        if (inviteJoinUrl) {
+                          await navigator.clipboard.writeText(inviteJoinUrl);
+                        }
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                    >
+                      <Copy className="size-3.5" />
+                      {copied ? "Copied" : "Copy link"}
+                    </Button>
+                    <a
+                      href={`mailto:${inviteEmail.trim()}?subject=${encodeURIComponent("You're invited to BrandMultiplier GTM")}&body=${encodeURIComponent(
+                        `You've been invited with role: ${inviteRole}.\n\nOpen this link to join (your email is pre-filled on the page):\n\n${inviteJoinUrl ?? lastInviteUrl}\n`,
+                      )}`}
+                      className="inline-flex h-7 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium text-foreground hover:bg-muted dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+                    >
+                      <Mail className="size-3.5" />
+                      Draft email
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <div className="clean-card p-6">
+          <h3 className="text-base font-medium text-foreground mb-4">Workspace members</h3>
+          <div className="space-y-2">
+            {members.map((member) => (
+              <div
+                key={`${member.workspaceId}:${member.userId}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border p-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{member.email || member.userId}</p>
+                  <p className="text-xs text-stone font-mono truncate">{member.userId}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="rounded-full bg-muted px-2 py-1 text-xs text-stone">{member.role}</span>
+                  {canManageMembers && member.userId !== user?.id ? (
+                    <button
+                      type="button"
+                      onClick={() => setRemoveTarget(member)}
+                      disabled={removingId === member.userId}
+                      className="rounded-lg border border-destructive/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                    >
+                      {removingId === member.userId ? "…" : "Remove"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="clean-card p-6">
+          <h3 className="text-base font-medium text-foreground mb-4">Recent invites</h3>
+          <div className="space-y-2">
+            {!canManageMembers ? (
+              <p className="text-xs text-stone">Only workspace admin or super admin can view pending invites.</p>
+            ) : null}
+            {canManageMembers && invites.length === 0 ? <p className="text-xs text-stone">No invite links yet.</p> : null}
+            {canManageMembers
+              ? invites.map((invite) => (
+                <div key={invite.id} className="rounded-xl border border-border p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">{invite.role}</span>
+                    <span className="text-xs text-stone">{invite.acceptedAt ? "Accepted" : "Open"}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-stone">Expires {formatShortDateTime(invite.expiresAt)}</p>
+                </div>
+              ))
+              : null}
+          </div>
+        </div>
+      </div>
+
+      <Dialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+      >
+        <DialogContent className="gap-4 sm:max-w-md" showCloseButton>
+          <DialogHeader>
+            <DialogTitle>Remove from workspace?</DialogTitle>
+            <DialogDescription>
+              {removeTarget
+                ? (
+                  <>
+                    Remove <span className="font-medium text-foreground">{removeTarget.email || removeTarget.userId}</span> from this workspace. They lose access immediately.
+                  </>
+                )
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 border-0 bg-transparent p-0 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setRemoveTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!removeTarget || removingId !== null}
+              onClick={() => void confirmRemoveMember()}
+            >
+              {removingId ? <Loader2 className="size-4 animate-spin" /> : null}
+              Remove member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={errorDialog !== null} onOpenChange={(open) => !open && setErrorDialog(null)}>
+        <DialogContent className="gap-4 sm:max-w-md" showCloseButton>
+          <DialogHeader>
+            <DialogTitle>Something went wrong</DialogTitle>
+            <DialogDescription className="text-destructive">
+              {errorDialog}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
+            <Button type="button" onClick={() => setErrorDialog(null)}>
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1497,23 +2002,34 @@ function SettingsInput({
   onChange,
   disabled,
   placeholder,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  hint?: string;
 }) {
   return (
     <label className="block text-sm">
-      <span className="text-[11px] uppercase tracking-[0.18em] text-stone">{label}</span>
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{label}</span>
       <input
-        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm disabled:opacity-60"
+        className={cn(
+          "mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/55",
+          "border-border/90 bg-muted/20 dark:bg-muted/35",
+          "shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/35 focus-visible:border-orange-500/45",
+          "disabled:cursor-not-allowed disabled:opacity-[0.62]",
+        )}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
         placeholder={placeholder}
       />
+      {hint ? (
+        <p className="mt-1 text-[11px] text-muted-foreground/90 leading-snug">{hint}</p>
+      ) : null}
     </label>
   );
 }

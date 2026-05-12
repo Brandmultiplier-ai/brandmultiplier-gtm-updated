@@ -4,6 +4,7 @@ import type { Workspace } from "@/lib/types";
 import { requireSession } from "@/lib/auth/resolve-session";
 import { listWorkspaceMembershipsForUser, setWorkspaceMembership } from "@/lib/app-auth-persistence";
 import { canManageWorkspaceSettings, requireAppWorkspaceRead } from "@/lib/auth/resolve-app-workspace";
+import { DEFAULT_BRANDMULTIPLIER_WORKSPACE_ID } from "@/lib/default-workspace";
 
 function serializeWorkspace(workspace: Workspace) {
   return {
@@ -20,18 +21,50 @@ function serializeWorkspace(workspace: Workspace) {
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (!session.ok) return session.response;
+
+  if (session.value.globalRole === "super admin") {
+    const memberships = await listWorkspaceMembershipsForUser(session.value.userId);
+    if (memberships.length === 0) {
+      const hub = await store.getWorkspace(DEFAULT_BRANDMULTIPLIER_WORKSPACE_ID);
+      if (hub) {
+        await setWorkspaceMembership(session.value.userId, hub.id, "workspace admin");
+      }
+    }
+    const all = await store.listWorkspaces();
+    const sorted = [...all].sort((a, b) => {
+      if (a.id === DEFAULT_BRANDMULTIPLIER_WORKSPACE_ID) return -1;
+      if (b.id === DEFAULT_BRANDMULTIPLIER_WORKSPACE_ID) return 1;
+      return 0;
+    });
+    return NextResponse.json({
+      workspaces: sorted.map(serializeWorkspace),
+      superAdmin: true,
+    });
+  }
+
   const memberships = await listWorkspaceMembershipsForUser(session.value.userId);
   const workspaces: Workspace[] = [];
   for (const m of memberships) {
     const w = await store.getWorkspace(m.workspaceId);
     if (w) workspaces.push(w);
   }
-  return NextResponse.json({ workspaces: workspaces.map(serializeWorkspace) });
+  return NextResponse.json({ workspaces: workspaces.map(serializeWorkspace), superAdmin: false });
 }
 
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (!session.ok) return session.response;
+
+  if (session.value.globalRole !== "super admin") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Only a super admin can create a new workspace. Ask your super admin or use an invite link to join an existing workspace.",
+      },
+      { status: 403 },
+    );
+  }
+
   const body = await req.json().catch(() => ({}));
 
   const workspace: Workspace = {
@@ -47,7 +80,7 @@ export async function POST(req: NextRequest) {
   };
 
   const saved = await store.saveWorkspace(workspace);
-  await setWorkspaceMembership(session.value.userId, saved.id, "owner");
+  await setWorkspaceMembership(session.value.userId, saved.id, "workspace admin");
   return NextResponse.json({ ok: true, workspace: serializeWorkspace(saved) });
 }
 

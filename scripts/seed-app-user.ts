@@ -1,5 +1,5 @@
 /**
- * One-off: create an app user and grant owner on all existing workspaces.
+ * One-off: create an app user and grant workspace admin on all existing workspaces.
  * Usage:  npx tsx scripts/seed-app-user.ts
  * Requires: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and:
  *   BM_GTM_SEED_EMAIL, BM_GTM_SEED_PASSWORD
@@ -58,7 +58,7 @@ async function main() {
     const { error } = await supabase
       .from("workspace_memberships")
       .upsert(
-        { user_id: userId, workspace_id: wid, role: "owner" },
+        { user_id: userId, workspace_id: wid, role: "workspace admin" },
         { onConflict: "user_id,workspace_id" },
       );
     if (error) {

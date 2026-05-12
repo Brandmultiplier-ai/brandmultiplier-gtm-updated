@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth/resolve-session";
-import { getWorkspaceMembership } from "@/lib/app-auth-persistence";
+import { effectiveWorkspaceMembership } from "@/lib/auth/resolve-app-workspace";
 import { BM_GTM_ACTIVE_WORKSPACE_COOKIE, sessionCookieBase } from "@/lib/auth/cookie-names";
 import { JWT_MAX_AGE } from "@/lib/auth/jwt";
 
@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
   if (!wid) {
     return NextResponse.json({ ok: false, error: "workspaceId required" }, { status: 400 });
   }
-  const m = await getWorkspaceMembership(session.value.userId, wid);
-  if (!m) {
+  const hit = await effectiveWorkspaceMembership(session.value.userId, session.value.globalRole, wid);
+  if (!hit) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
   const res = NextResponse.json({ ok: true, activeWorkspaceId: wid });

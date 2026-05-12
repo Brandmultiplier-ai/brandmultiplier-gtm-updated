@@ -9,9 +9,12 @@ export async function apiFetch(
     ...init,
     credentials: "include",
   });
-  if (r.status === 401 && typeof window !== "undefined" && !String(input).includes("/api/auth/")) {
+  if (r.status === 401 && typeof window !== "undefined") {
+    const url = String(input);
+    // Avoid redirect loop on login/bootstrap; other /api/auth/* (e.g. me) should send user to login
+    const skipRedirect = /\/api\/auth\/(login|logout|bootstrap)/.test(url);
     const path = window.location.pathname;
-    if (path !== "/login") {
+    if (!skipRedirect && path !== "/login") {
       window.location.assign("/login");
     }
   }

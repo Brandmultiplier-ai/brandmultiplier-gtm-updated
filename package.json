@@ -12,7 +12,9 @@
     "outreach": "tsx scripts/run-campaign.ts",
     "outreach:dry": "tsx scripts/run-campaign.ts --dry-run",
     "cron:configure": "tsx scripts/configure-supabase-cron.ts",
-    "webhooks:configure": "tsx scripts/configure-unipile-webhooks.ts"
+    "webhooks:configure": "tsx scripts/configure-unipile-webhooks.ts",
+    "seed:superadmin": "tsx scripts/seed-superadmin.ts",
+    "auth:reset-superadmin": "tsx scripts/reset-and-seed-superadmin.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

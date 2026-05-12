@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as store from "@/lib/store";
 import { requireSession } from "@/lib/auth/resolve-session";
-import { getWorkspaceMembership } from "@/lib/app-auth-persistence";
-import { canManageWorkspaceSettings } from "@/lib/auth/resolve-app-workspace";
+import { effectiveWorkspaceMembership, requireWorkspaceAccessById } from "@/lib/auth/resolve-app-workspace";
+import { isSuperAdminGlobalRole } from "@/lib/auth/role-values";
 import type { Workspace } from "@/lib/types";
 
 function serializeWorkspace(w: Workspace) {
@@ -21,12 +21,9 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { id: workspaceId } = await params;
-  const session = await requireSession(req);
-  if (!session.ok) return session.response;
-  const m = await getWorkspaceMembership(session.value.userId, workspaceId);
-  if (!m || !canManageWorkspaceSettings(m.role)) {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
+  const $ws = await requireWorkspaceAccessById(req, workspaceId, { requireManageSettings: true });
+  if (!$ws.ok) return $ws.response;
+
   const body = await req.json().catch(() => ({})) as Partial<Workspace>;
   const existing = await store.getWorkspace(workspaceId);
   if (!existing) {
@@ -41,9 +38,19 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const { id: workspaceId } = await params;
   const session = await requireSession(req);
   if (!session.ok) return session.response;
-  const m = await getWorkspaceMembership(session.value.userId, workspaceId);
-  if (!m || m.role !== "owner") {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!isSuperAdminGlobalRole(session.value.globalRole)) {
+    return NextResponse.json(
+      { ok: false, error: "Only a super admin can delete a workspace." },
+      { status: 403 },
+    );
+  }
+  const hit = await effectiveWorkspaceMembership(
+    session.value.userId,
+    session.value.globalRole,
+    workspaceId,
+  );
+  if (!hit) {
+    return NextResponse.json({ ok: false, error: "Workspace not found" }, { status: 404 });
   }
   await store.deleteWorkspace(workspaceId);
   return NextResponse.json({ ok: true });

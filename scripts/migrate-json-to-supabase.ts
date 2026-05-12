@@ -245,6 +245,7 @@ function workspaceRow(workspace: Record<string, unknown>) {
     niche: workspace.niche,
     default_language: workspace.defaultLanguage || "en",
     channels: workspace.channels || {},
+    profile_settings: workspace.profileSettings || {},
     created_at: workspace.createdAt || new Date().toISOString(),
     updated_at: workspace.updatedAt || new Date().toISOString(),
   };
@@ -273,6 +274,7 @@ function campaignRow(campaign: Record<string, unknown>) {
     id: campaign.id,
     workspace_id: campaign.workspaceId || "ws_default",
     agent_id: campaign.agentId,
+    linkedin_seat_id: campaign.linkedinSeatId || null,
     name: campaign.name,
     status: campaign.status,
     segment: campaign.segment || "",
@@ -282,6 +284,79 @@ function campaignRow(campaign: Record<string, unknown>) {
     settings: campaign.settings || null,
     created_at: campaign.createdAt || new Date().toISOString(),
     updated_at: campaign.updatedAt || new Date().toISOString(),
+  };
+}
+
+function linkedinSeatRow(seat: Record<string, unknown>) {
+  return {
+    id: seat.id,
+    workspace_id: seat.workspaceId || "ws_default",
+    name: seat.name || "LinkedIn Seat",
+    status: seat.status || "active",
+    country: seat.country || "",
+    unipile_account_id: seat.unipileAccountId || "",
+    is_default: Boolean(seat.isDefault),
+    provider_connection_id: seat.providerConnectionId || null,
+    quotas: seat.quotas || {},
+    schedule: seat.schedule || {},
+    usage: seat.usage || {},
+    created_at: seat.createdAt || new Date().toISOString(),
+    updated_at: seat.updatedAt || new Date().toISOString(),
+  };
+}
+
+function providerConnectionRow(connection: Record<string, unknown>) {
+  return {
+    id: connection.id,
+    workspace_id: connection.workspaceId || "ws_default",
+    provider: connection.provider || "unipile",
+    unipile_account_id: connection.unipileAccountId,
+    unipile_api_key: connection.unipileApiKey || null,
+    unipile_base_url: connection.unipileBaseUrl || null,
+    name: connection.name || "Connection",
+    is_default: connection.isDefault !== false,
+    created_at: connection.createdAt || new Date().toISOString(),
+    updated_at: connection.updatedAt || new Date().toISOString(),
+  };
+}
+
+function signalCandidateRow(signal: Record<string, unknown>) {
+  return {
+    id: signal.id,
+    workspace_id: signal.workspaceId || "ws_default",
+    agent_id: signal.agentId,
+    campaign_id: signal.campaignId || null,
+    lead_id: signal.leadId || null,
+    provider_id: signal.providerId,
+    name: signal.name,
+    headline: signal.headline || "",
+    location: signal.location || "",
+    public_identifier: signal.publicIdentifier || "",
+    network_distance: signal.networkDistance || "",
+    signal_source: signal.signalSource,
+    signal_context: signal.signalContext || "",
+    source_post_id: signal.sourcePostId || null,
+    topic_key: signal.topicKey || null,
+    topic_label: signal.topicLabel || null,
+    signal_kind: signal.signalKind || null,
+    signal_payload: signal.signalPayload || {},
+    language: signal.language || "en",
+    icp_fit: signal.icpFit || 0,
+    intent_score: signal.intentScore || 0,
+    total_score: signal.totalScore || 0,
+    score_reasoning: signal.scoreReasoning || "",
+    status: signal.status || "new",
+    created_at: signal.createdAt || new Date().toISOString(),
+    updated_at: signal.updatedAt || new Date().toISOString(),
+  };
+}
+
+function dashboardSnapshotRow(snapshot: Record<string, unknown>) {
+  return {
+    workspace_id: snapshot.workspaceId || "ws_default",
+    period: snapshot.period,
+    payload: snapshot.payload || {},
+    computed_at: snapshot.computedAt || new Date().toISOString(),
   };
 }
 
@@ -300,7 +375,7 @@ function leadRow(lead: Record<string, unknown>) {
     profile_picture_url: lead.profilePictureUrl || null,
     segment: lead.segment || "",
     language: lead.language || "en",
-    ai_score: lead.aiScore || 0,
+    ai_score: Math.round(Number(lead.aiScore) || 0),
     signal: lead.signal || "",
     status: lead.status,
     current_step: lead.currentStep || 0,
@@ -432,13 +507,50 @@ async function main() {
   const workspaces = workspaceFiles.map((file) => readJson<Record<string, unknown>>(file)).filter(Boolean) as Record<string, unknown>[];
   await chunkedUpsert("workspaces", workspaces.map(workspaceRow));
 
+  const providerConnectionRows: Record<string, unknown>[] = [];
+  const providerConnectionDir = dataPath("provider-connections");
+  if (existsSync(providerConnectionDir)) {
+    for (const file of listJsonFiles(providerConnectionDir)) {
+      const rows = readJson<Record<string, unknown>[]>(file) || [];
+      providerConnectionRows.push(
+        ...rows
+          .filter((connection) => typeof connection.id === "string" && typeof connection.unipileAccountId === "string")
+          .map(providerConnectionRow),
+      );
+    }
+  }
+  if (providerConnectionRows.length > 0) {
+    await chunkedUpsert("provider_connections", providerConnectionRows);
+  }
+
+  const workspaceStateDir = dataPath("workspaces");
+  const linkedInSeatRows: Record<string, unknown>[] = [];
+  if (existsSync(workspaceStateDir)) {
+    for (const name of readdirSync(workspaceStateDir)) {
+      const nestedDir = join(workspaceStateDir, name);
+      const seats = readJson<Record<string, unknown>[]>(join(nestedDir, "linkedin-seats.json")) || [];
+      linkedInSeatRows.push(
+        ...seats
+          .filter((seat) => typeof seat.id === "string" && typeof seat.unipileAccountId === "string")
+          .map(linkedinSeatRow),
+      );
+    }
+  }
+  if (linkedInSeatRows.length > 0) {
+    await chunkedUpsert("linkedin_seats", linkedInSeatRows);
+  }
+
   const agentFiles = listJsonFiles(dataPath("agents"));
   const agents = agentFiles.map((file) => readJson<Record<string, unknown>>(file)).filter(Boolean) as Record<string, unknown>[];
   await chunkedUpsert("agents", agents.map(agentRow));
+  const validAgentIds = new Set(agents.map((agent) => String(agent.id)));
 
   const campaignFiles = listJsonFiles(dataPath("campaigns"));
-  const campaigns = campaignFiles.map((file) => readJson<Record<string, unknown>>(file)).filter(Boolean) as Record<string, unknown>[];
+  const allCampaigns = campaignFiles.map((file) => readJson<Record<string, unknown>>(file)).filter(Boolean) as Record<string, unknown>[];
+  const skippedOrphanCampaigns = allCampaigns.filter((campaign) => !validAgentIds.has(String(campaign.agentId)));
+  const campaigns = allCampaigns.filter((campaign) => validAgentIds.has(String(campaign.agentId)));
   await chunkedUpsert("campaigns", campaigns.map(campaignRow));
+  const validCampaignIds = new Set(campaigns.map((campaign) => String(campaign.id)));
 
   const leadAliases = new Map<string, string>();
   const dedupedLeads = new Map<string, Record<string, unknown>>();
@@ -446,6 +558,7 @@ async function main() {
   if (existsSync(leadsDir)) {
     for (const campaignId of readdirSync(leadsDir)) {
       if (campaignId.startsWith("_") || campaignId.endsWith(".json")) continue;
+      if (!validCampaignIds.has(campaignId)) continue;
       const campaignDir = join(leadsDir, campaignId);
       for (const file of listJsonFiles(campaignDir)) {
         const lead = readJson<Record<string, unknown>>(file);
@@ -465,24 +578,48 @@ async function main() {
   }
   const leadRows = Array.from(dedupedLeads.values()).map(leadRow);
   await chunkedUpsert("leads", leadRows);
+  const validLeadIds = new Set(leadRows.map((lead) => String(lead.id)));
+
+  const signalRows = listJsonFiles(dataPath("signals"))
+    .map((file) => readJson<Record<string, unknown>>(file))
+    .filter((signal): signal is Record<string, unknown> => Boolean(
+      signal &&
+      typeof signal.id === "string" &&
+      typeof signal.agentId === "string" &&
+      typeof signal.providerId === "string" &&
+      validAgentIds.has(String(signal.agentId)),
+    ))
+    .map((signal) => signalCandidateRow({
+      ...signal,
+      campaignId: typeof signal.campaignId === "string" && validCampaignIds.has(signal.campaignId) ? signal.campaignId : undefined,
+      leadId: typeof signal.leadId === "string" && validLeadIds.has(resolveLeadId(signal.leadId, leadAliases))
+        ? resolveLeadId(signal.leadId, leadAliases)
+        : undefined,
+    }));
+  if (signalRows.length > 0) {
+    await chunkedUpsert("signal_candidates", signalRows);
+  }
 
   const templateRows: Record<string, unknown>[] = [];
   const contactListRows: Record<string, unknown>[] = [];
-  const workspaceStateDir = dataPath("workspaces");
+  const dashboardSnapshotRows: Record<string, unknown>[] = [];
   if (existsSync(workspaceStateDir)) {
     for (const name of readdirSync(workspaceStateDir)) {
       const nestedDir = join(workspaceStateDir, name);
       const templates = readJson<Record<string, unknown>[]>(join(nestedDir, "templates.json")) || [];
       const lists = readJson<Record<string, unknown>[]>(join(nestedDir, "lists.json")) || [];
+      const snapshots = readJson<Record<string, unknown>[]>(join(nestedDir, "dashboard-snapshots.json")) || [];
       templateRows.push(...templates.map(templateRow));
       contactListRows.push(...lists.map((list) => contactListRow({
         ...list,
         leadIds: maybeArray<string>(list.leadIds).map((leadId) => resolveLeadId(leadId, leadAliases)),
       })));
+      dashboardSnapshotRows.push(...snapshots.map(dashboardSnapshotRow));
     }
   }
   if (templateRows.length > 0) await chunkedUpsert("workspace_templates", templateRows);
   if (contactListRows.length > 0) await chunkedUpsert("contact_lists", contactListRows);
+  if (dashboardSnapshotRows.length > 0) await chunkedUpsert("dashboard_snapshots", dashboardSnapshotRows, "workspace_id,period");
 
   const discoveryRuns = readJsonLines<Record<string, unknown>>(dataPath("discovery-runs.jsonl"));
   if (discoveryRuns.length > 0) {
@@ -578,10 +715,15 @@ async function main() {
     workspaces: workspaces.length,
     agents: agents.length,
     campaigns: campaigns.length,
+    skippedOrphanCampaigns: skippedOrphanCampaigns.length,
     leads: leadRows.length,
+    signals: signalRows.length,
     leadAliases: Array.from(leadAliases.entries()).filter(([from, to]) => from !== to).length,
+    providerConnections: providerConnectionRows.length,
+    linkedinSeats: linkedInSeatRows.length,
     templates: templateRows.length,
     contactLists: contactListRows.length,
+    dashboardSnapshots: dashboardSnapshotRows.length,
     discoveryRuns: discoveryRuns.length,
     outreachRuns: outreachRuns.length,
     webhookEvents: webhookEvents.length,

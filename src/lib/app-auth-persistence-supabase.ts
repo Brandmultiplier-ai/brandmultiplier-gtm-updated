@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from "./supabase/admin";
-import type { AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
+import type { AppGlobalRole, AppUser, WorkspaceInvite, WorkspaceMembership, WorkspaceRole } from "./types";
 import { normalizeAppEmail } from "./auth/email";
+import { normalizeAppGlobalRoleFromStorage, normalizeWorkspaceRoleFromStorage } from "@/lib/auth/role-values";
 import * as store from "./store";
 
 type UserRow = {
@@ -8,6 +9,8 @@ type UserRow = {
   email: string;
   display_name: string | null;
   profile_settings: unknown;
+  password_hash?: string;
+  global_role?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -36,9 +39,11 @@ function maybeRecord<T extends Record<string, unknown>>(value: unknown, fallback
 }
 
 function mapUser(r: UserRow): AppUser {
+  const gr = normalizeAppGlobalRoleFromStorage(r.global_role);
   return {
     id: r.id,
     email: r.email,
+    globalRole: gr,
     displayName: r.display_name || undefined,
     profileSettings: maybeRecord(r.profile_settings, {}),
     createdAt: r.created_at,
@@ -50,7 +55,7 @@ function mapM(r: MembershipRow): WorkspaceMembership {
   return {
     userId: r.user_id,
     workspaceId: r.workspace_id,
-    role: r.role,
+    role: normalizeWorkspaceRoleFromStorage(r.role),
     createdAt: r.created_at,
   };
 }
@@ -60,7 +65,7 @@ function mapInvite(r: InviteRow): WorkspaceInvite {
     id: r.id,
     workspaceId: r.workspace_id,
     tokenHash: r.token_hash,
-    role: r.role,
+    role: normalizeWorkspaceRoleFromStorage(r.role),
     createdByUserId: r.created_by_user_id || undefined,
     acceptedByUserId: r.accepted_by_user_id || undefined,
     expiresAt: r.expires_at,
@@ -109,6 +114,7 @@ export async function getAppUserWithHashByEmail(
       display_name: string | null;
       profile_settings: unknown;
       password_hash: string;
+      global_role: string | null;
       created_at: string;
       updated_at: string;
     }>();
@@ -119,6 +125,7 @@ export async function getAppUserWithHashByEmail(
     email: data.email,
     displayName: data.display_name || undefined,
     profileSettings: maybeRecord(data.profile_settings, {}),
+    globalRole: normalizeAppGlobalRoleFromStorage(data.global_role),
     createdAt: data.created_at,
     updatedAt: data.updated_at,
     passwordHash: data.password_hash,
@@ -128,9 +135,11 @@ export async function getAppUserWithHashByEmail(
 export async function createAppUser(
   email: string,
   passwordHash: string,
+  opts?: { globalRole?: AppGlobalRole },
 ): Promise<AppUser> {
   const n = normalizeAppEmail(email);
   const supabase = getSupabaseAdminClient();
+  const globalRole = opts?.globalRole === "super admin" ? "super admin" : "member";
   const { data, error } = await supabase
     .from("app_users")
     .insert({
@@ -138,6 +147,7 @@ export async function createAppUser(
       password_hash: passwordHash,
       display_name: n.split("@")[0],
       profile_settings: {},
+      global_role: globalRole,
       updated_at: new Date().toISOString(),
     })
     .select("*")

@@ -110,16 +110,28 @@ export interface LinkedInSeat {
   providerConnectionId?: string;
 }
 
-export type WorkspaceRole = "owner" | "admin" | "operator" | "viewer";
+/** Stored on `workspace_memberships.role` and `workspace_invites.role` (same strings in UI). */
+export type WorkspaceRole = "workspace admin" | "user";
+
+/**
+ * Stored on `app_users.global_role` (same strings in UI).
+ * `member` = normal account; workspace access comes from `workspace_memberships`.
+ */
+export type AppGlobalRole = "super admin" | "member";
 
 export interface AppUser {
   id: string;
   email: string;
+  /** super admin: all workspaces; member: invite-only / normal accounts */
+  globalRole?: AppGlobalRole;
   displayName?: string;
   profileSettings?: {
     title?: string;
     phone?: string;
     timezone?: string;
+    /** Normalized profile URL, e.g. https://www.linkedin.com/in/handle */
+    linkedinProfileUrl?: string;
+    linkedinPublicIdentifier?: string;
   };
   createdAt: string;
   updatedAt: string;

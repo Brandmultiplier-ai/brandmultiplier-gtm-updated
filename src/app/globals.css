@@ -258,6 +258,84 @@
   box-shadow: 0 0 0 1px rgba(245, 244, 237, 0.12);
 }
 
+/* ─── Primary actions (Settings etc.) ─── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-xl, 12px);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bm-white);
+  background: var(--brand-primary);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 88%, #000 12%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  cursor: pointer;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-primary-hover);
+  box-shadow: 0 4px 16px -6px color-mix(in srgb, var(--brand-primary) 50%, transparent);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-xl, 12px);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--card) 90%, var(--bm-orange) 10%);
+  border: 1px solid color-mix(in srgb, var(--bm-orange) 32%, var(--border));
+  transition: background 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+}
+.dark .btn-secondary {
+  background: rgba(249, 115, 22, 0.1);
+  border-color: rgba(249, 115, 22, 0.35);
+}
+.btn-secondary:hover {
+  background: color-mix(in srgb, var(--card) 82%, var(--bm-orange) 18%);
+  border-color: color-mix(in srgb, var(--bm-orange) 48%, var(--border));
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-lg, 10px);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--foreground);
+  background: transparent;
+  border: 1px solid var(--border);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+.btn-ghost:hover {
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  border-color: color-mix(in srgb, var(--bm-orange) 25%, var(--border));
+  color: color-mix(in srgb, var(--foreground) 92%, var(--bm-orange) 8%);
+}
+
 /* ─── Glass Panel — warm parchment veil ─── */
 .glass-panel {
   background: color-mix(in srgb, var(--ivory) 80%, transparent);

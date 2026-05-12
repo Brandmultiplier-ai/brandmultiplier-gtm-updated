@@ -56,8 +56,14 @@ export default function LoginPage() {
             {needsBootstrap ? (
               <>
                 {" "}
-                First-time setup: set <code>BM_GTM_BOOTSTRAP_SECRET</code> on the server and enter the same value
-                below (only while there are no users yet).
+                <span className="block mt-2 text-muted-foreground">
+                  The database has <strong>no users yet</strong>. Your server admin sets a one-time secret in{" "}
+                  <code className="text-foreground/90">BM_GTM_BOOTSTRAP_SECRET</code> (Vercel / Supabase env). You type the
+                  same value below <strong>only for this first account</strong> — it is not an invitation link and not
+                  workspace-specific; it simply prevents strangers from registering before you do. After this user
+                  exists, remove the secret from production and invite teammates from{" "}
+                  <strong>Settings → Organization</strong> instead.
+                </span>
               </>
             ) : null}
           </p>
@@ -87,7 +93,7 @@ export default function LoginPage() {
         </label>
         {needsBootstrap ? (
           <label className="block text-sm">
-            <span className="text-muted-foreground">Bootstrap secret (first user only)</span>
+            <span className="text-muted-foreground">One-time server secret (empty after first user exists)</span>
             <input
               type="password"
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2"
